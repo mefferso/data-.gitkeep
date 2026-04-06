@@ -24,7 +24,7 @@ jobs:
           mkdir -p downloads extracted data
           rm -f downloads/*
           rm -rf extracted/*
-          rm -f data/new_canal.csv data/new_canal_raw.csv
+          rm -f data/*.csv
 
           DATE=$(date -u +%Y%m%d)
           FOUND=""
@@ -68,7 +68,7 @@ jobs:
           tar -tzf "$ARCHIVE" > /tmp/petss_contents.txt
 
           echo "First 200 archive entries:"
-          head -200 /tmp/petss_contents.txt
+          head -200 /tmp/petss_contents.txt || true
 
       - name: Extract archive
         shell: bash
@@ -86,70 +86,105 @@ jobs:
           echo "First 300 extracted files:"
           find extracted -type f | sed 's/^/ - /' | head -300 || true
 
-      - name: Find New Canal station file
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          FILE=$(grep -Ril "8761927" extracted | head -n 1 || true)
-
-          if [ -z "$FILE" ]; then
-            FILE=$(find extracted -type f | grep "8761927" | head -n 1 || true)
-          fi
-
-          if [ -z "$FILE" ]; then
-            echo "Could not find a file containing station 8761927."
-            echo "Nearby candidates:"
-            find extracted -type f | head -100 || true
-            exit 1
-          fi
-
-          echo "Using file: $FILE"
-          cp "$FILE" data/new_canal_raw.csv
-
-      - name: Clean missing values and save final CSV
+      - name: Find station files and write cleaned CSVs
         shell: bash
         run: |
           set -euo pipefail
 
           python3 - <<'PY'
           import csv
+          import subprocess
           from pathlib import Path
 
-          infile = Path("data/new_canal_raw.csv")
-          outfile = Path("data/new_canal.csv")
+          stations = {
+              "8747437": "Waveland, MS",
+              "8760922": "Pilots Station, LA",
+              "8761305": "Shell Beach, LA",
+              "8761724": "Grand Isle, LA",
+              "8762075": "Port Fourchon, LA",
+              "8761927": "New Canal Station, LA",
+          }
 
-          with infile.open("r", newline="") as f_in, outfile.open("w", newline="") as f_out:
-              sample = f_in.read(4096)
-              f_in.seek(0)
+          extracted = Path("extracted")
+          data_dir = Path("data")
+          data_dir.mkdir(exist_ok=True)
 
+          def find_station_file(station_id: str):
+              # First try content match
               try:
-                  dialect = csv.Sniffer().sniff(sample, delimiters=",\t ")
+                  result = subprocess.run(
+                      ["grep", "-Ril", station_id, str(extracted)],
+                      capture_output=True,
+                      text=True,
+                      check=False
+                  )
+                  matches = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+                  if matches:
+                      return Path(matches[0])
               except Exception:
-                  class SimpleDialect(csv.excel):
-                      delimiter = ","
-                  dialect = SimpleDialect
+                  pass
 
-              reader = csv.reader(f_in, dialect)
-              writer = csv.writer(f_out)
+              # Fallback: filename match
+              for p in extracted.rglob("*"):
+                  if p.is_file() and station_id in p.name:
+                      return p
 
-              for row in reader:
-                  cleaned = []
-                  for cell in row:
-                      v = cell.strip()
-                      if v in ("9999.000", "9999"):
-                          cleaned.append("")
-                      else:
-                          cleaned.append(v)
-                  writer.writerow(cleaned)
+              return None
 
-          print("Created data/new_canal.csv")
+          found_any = False
+          missing = []
+
+          for station_id, station_name in stations.items():
+              src = find_station_file(station_id)
+
+              if src is None:
+                  print(f"WARNING: Could not find file for {station_id} ({station_name})")
+                  missing.append(station_id)
+                  continue
+
+              print(f"Using file for {station_id} ({station_name}): {src}")
+
+              out_csv = data_dir / f"{station_id}.csv"
+
+              with src.open("r", newline="") as f_in, out_csv.open("w", newline="") as f_out:
+                  sample = f_in.read(4096)
+                  f_in.seek(0)
+
+                  try:
+                      dialect = csv.Sniffer().sniff(sample, delimiters=",\t ")
+                  except Exception:
+                      class SimpleDialect(csv.excel):
+                          delimiter = ","
+                      dialect = SimpleDialect
+
+                  reader = csv.reader(f_in, dialect)
+                  writer = csv.writer(f_out)
+
+                  for row in reader:
+                      cleaned = []
+                      for cell in row:
+                          v = cell.strip()
+                          if v in ("9999.000", "9999"):
+                              cleaned.append("")
+                          else:
+                              cleaned.append(v)
+                      writer.writerow(cleaned)
+
+              print(f"Created {out_csv}")
+              found_any = True
+
+          if not found_any:
+              raise SystemExit("ERROR: No station CSVs were created.")
+
+          print("\nFinished station extraction.")
+          if missing:
+              print("Missing stations:", ", ".join(missing))
           PY
 
-          rm -f data/new_canal_raw.csv
-          ls -lh data/new_canal.csv
+          echo "Created CSV files:"
+          ls -lh data/*.csv
 
-      - name: Commit updated CSV
+      - name: Commit updated CSVs
         shell: bash
         run: |
           set -euo pipefail
@@ -157,12 +192,12 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/new_canal.csv
+          git add data/*.csv
 
           if git diff --cached --quiet; then
             echo "No changes to commit."
             exit 0
           fi
 
-          git commit -m "Update PETSS New Canal CSV"
+          git commit -m "Update PETSS station CSVs"
           git push
