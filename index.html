@@ -163,7 +163,7 @@
             y: yObserved,
             mode: "lines",
             name: "Observed water level",
-            line: { width: 4, color: "#ff7f0e" },
+            line: { width: 4, color: "#2ca02c" },
             connectgaps: false,
             hovertemplate: "Observed<br>%{x}<br>%{y:.2f} ft MLLW<extra></extra>"
           },
@@ -172,7 +172,7 @@
             y: [floodThreshold, floodThreshold],
             mode: "lines",
             name: `Flood criteria (${floodThreshold.toFixed(2)} ft MLLW)`,
-            line: { width: 3, color: "#2c7fb8" },
+            line: { width: 3, color: "#ff7f0e" },
             hovertemplate: "Flood criteria: %{y:.2f} ft MLLW<extra></extra>"
           }
         ];
