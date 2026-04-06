@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>PETSS Water Level Plot</title>
+  <title>New Canal Station Water Levels</title>
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
   <style>
@@ -10,11 +10,11 @@
       font-family: Arial, sans-serif;
       margin: 0;
       padding: 20px;
-      background: #f7f7f7;
+      background: #f4f4f4;
     }
     #chart {
       width: 100%;
-      height: 850px;
+      height: 900px;
     }
   </style>
 </head>
@@ -22,195 +22,158 @@
   <div id="chart"></div>
 
   <script>
-    // =========================
-    // USER SETTINGS
-    // =========================
     const stationName = "New Canal Station, LA";
-    const floodThreshold = 1.8; // <-- change this to your station threshold in ft MLLW
-
-    // Use your GitHub Pages or raw CSV URL here
+    const floodThreshold = 1.80; // ft MLLW
     const csvUrl = "data/new_canal.csv";
-    // If testing outside repo root, use:
-    // const csvUrl = "https://raw.githubusercontent.com/YOURUSERNAME/YOURREPO/main/data/new_canal.csv";
 
-    // =========================
-    // HELPERS
-    // =========================
     function parsePetssTime(s) {
-      // expects YYYYMMDDHHMM
-      if (!s || s.length < 12) return null;
+      s = String(s).trim();
+      if (s.length !== 12) return null;
+
       const year = Number(s.slice(0, 4));
       const month = Number(s.slice(4, 6)) - 1;
       const day = Number(s.slice(6, 8));
       const hour = Number(s.slice(8, 10));
       const minute = Number(s.slice(10, 12));
+
       return new Date(Date.UTC(year, month, day, hour, minute));
     }
 
     function toNumber(v) {
-      if (v === undefined || v === null || v === "") return null;
-      const n = Number(v);
+      if (v === undefined || v === null) return null;
+      const s = String(v).trim();
+      if (s === "") return null;
+      const n = Number(s);
       return Number.isFinite(n) ? n : null;
     }
 
-    function formatLocal(dt) {
-      return dt.toLocaleString("en-US", {
-        weekday: "short",
-        month: "short",
-        day: "2-digit",
-        hour: "numeric",
-        minute: "2-digit",
-        hour12: true,
-        timeZone: "America/Chicago"
-      });
-    }
-
-    // =========================
-    // LOAD CSV
-    // =========================
     Papa.parse(csvUrl, {
       download: true,
       dynamicTyping: false,
       skipEmptyLines: true,
       complete: function(results) {
-      console.log("First 10 parsed rows:", results.data.slice(0, 10));
-      document.getElementById("chart").innerHTML =
-        "<pre style='font-size:14px; white-space:pre-wrap;'>" +
-        JSON.stringify(results.data.slice(0, 10), null, 2) +
-        "</pre>";
-      return;
         const rows = results.data;
 
-        // --------------------------------------------------
-        // ASSUMED COLUMN MAP
-        // CHANGE THESE IF NEEDED
-        //
-        // 0 = TIME
-        // 1 = SURGE
-        // 2 = TIDE
-        // 3 = OBSERVED WATER LEVEL
-        // 4 = ANOMALY
-        // 5 = FORECAST WATER LEVEL (90?)
-        // 6 = FORECAST WATER LEVEL (10?)
-        // 7 = FORECAST WATER LEVEL
-        // 8 = ...
-        // 9 = ...
-        //
-        // Because NOAA files can vary, these indices may need tweaking.
-        // --------------------------------------------------
+        if (!rows || rows.length < 2) {
+          document.getElementById("chart").innerHTML =
+            "<p style='color:red;font-weight:bold;'>CSV loaded, but no usable rows were found.</p>";
+          return;
+        }
 
+        // Remove header row
+        const dataRows = rows.slice(1);
+
+        // Actual column map from your file
         const COL_TIME = 0;
-        const COL_SURGE = 1;
-        const COL_TIDE = 2;
-        const COL_OBS = 3;
-        const COL_ANOM = 4;
-        const COL_P90 = 5;       // adjust if needed
-        const COL_P10 = 6;       // adjust if needed
-        const COL_FORECAST = 7;  // adjust if needed
+        const COL_TIDE = 1;
+        const COL_OB = 2;
+        const COL_SURGE = 3;
+        const COL_BIAS = 4;
+        const COL_TWL = 5;
+        const COL_SURGE90P = 6;
+        const COL_TWL90P = 7;
+        const COL_SURGE10P = 8;
+        const COL_TWL10P = 9;
 
-        const times = [];
-        const observedX = [];
-        const observedY = [];
-        const forecastX = [];
-        const forecastY = [];
-        const p10 = [];
-        const p90 = [];
+        const xObserved = [];
+        const yObserved = [];
 
-        for (const row of rows) {
-          if (!row || row.length < 8) continue;
+        const xForecast = [];
+        const yForecast = [];
 
-          const dt = parsePetssTime(String(row[COL_TIME]).trim());
+        const xBand = [];
+        const yBandTop = [];
+        const yBandBottom = [];
+
+        for (const row of dataRows) {
+          if (!row || row.length < 10) continue;
+
+          const dt = parsePetssTime(row[COL_TIME]);
           if (!dt) continue;
 
-          const obs = toNumber(row[COL_OBS]);
-          const fcst = toNumber(row[COL_FORECAST]);
-          const low = toNumber(row[COL_P10]);
-          const high = toNumber(row[COL_P90]);
+          const ob = toNumber(row[COL_OB]);
+          const twl = toNumber(row[COL_TWL]);
+          const twl90 = toNumber(row[COL_TWL90P]);
+          const twl10 = toNumber(row[COL_TWL10P]);
 
-          times.push(dt);
+          if (ob !== null) {
+            xObserved.push(dt);
+            yObserved.push(ob);
+          }
 
-          // observed
-          observedX.push(dt);
-          observedY.push(obs);
+          if (twl !== null) {
+            xForecast.push(dt);
+            yForecast.push(twl);
+          }
 
-          // forecast
-          forecastX.push(dt);
-          forecastY.push(fcst);
-
-          // shading bounds
-          p10.push(low);
-          p90.push(high);
+          if (twl10 !== null && twl90 !== null) {
+            xBand.push(dt);
+            yBandTop.push(twl90);
+            yBandBottom.push(twl10);
+          }
         }
 
-        // Split observed vs forecast visually at last valid observed point
-        let lastObservedIndex = -1;
-        for (let i = 0; i < observedY.length; i++) {
-          if (observedY[i] !== null) lastObservedIndex = i;
+        if (xForecast.length === 0 && xObserved.length === 0) {
+          document.getElementById("chart").innerHTML =
+            "<p style='color:red;font-weight:bold;'>CSV loaded, but no TWL or OB values were found.</p>";
+          return;
         }
 
-        const obsLineX = observedX.slice(0, lastObservedIndex + 1);
-        const obsLineY = observedY.slice(0, lastObservedIndex + 1);
+        const firstTime =
+          xObserved.length > 0 && xForecast.length > 0
+            ? new Date(Math.min(xObserved[0].getTime(), xForecast[0].getTime()))
+            : (xObserved.length > 0 ? xObserved[0] : xForecast[0]);
 
-        const fcstLineX = forecastX.slice(lastObservedIndex + 1);
-        const fcstLineY = forecastY.slice(lastObservedIndex + 1);
-
-        const p10LineX = forecastX.slice(lastObservedIndex + 1);
-        const p10LineY = p10.slice(lastObservedIndex + 1);
-
-        const p90LineX = forecastX.slice(lastObservedIndex + 1);
-        const p90LineY = p90.slice(lastObservedIndex + 1);
+        const lastTime =
+          xObserved.length > 0 && xForecast.length > 0
+            ? new Date(Math.max(xObserved[xObserved.length - 1].getTime(), xForecast[xForecast.length - 1].getTime()))
+            : (xObserved.length > 0 ? xObserved[xObserved.length - 1] : xForecast[xForecast.length - 1]);
 
         const traces = [
-          // upper bound first
           {
-            x: p90LineX,
-            y: p90LineY,
+            x: xBand,
+            y: yBandTop,
             mode: "lines",
             line: { color: "rgba(0,0,0,0)" },
-            name: "90th percentile",
             hoverinfo: "skip",
-            showlegend: false
+            showlegend: false,
+            name: "90th percentile"
           },
-          // lower bound fills to previous trace
           {
-            x: p10LineX,
-            y: p10LineY,
+            x: xBand,
+            y: yBandBottom,
             mode: "lines",
             line: { color: "rgba(0,0,0,0)" },
             fill: "tonexty",
             fillcolor: "rgba(31,119,180,0.18)",
             name: "10th–90th percentile range",
-            hovertemplate:
-              "Time: %{x}<br>10th percentile: %{y:.2f} ft<extra></extra>"
+            hovertemplate: "10th percentile: %{y:.2f} ft MLLW<extra></extra>"
           },
           {
-            x: obsLineX,
-            y: obsLineY,
+            x: xForecast,
+            y: yForecast,
+            mode: "lines",
+            name: "Forecast water level",
+            line: { width: 4, color: "#1f77b4" },
+            connectgaps: false,
+            hovertemplate: "Forecast<br>%{x}<br>%{y:.2f} ft MLLW<extra></extra>"
+          },
+          {
+            x: xObserved,
+            y: yObserved,
             mode: "lines",
             name: "Observed water level",
             line: { width: 4, color: "#ff7f0e" },
             connectgaps: false,
-            hovertemplate:
-              "Observed<br>%{x}<br>%{y:.2f} ft MLLW<extra></extra>"
+            hovertemplate: "Observed<br>%{x}<br>%{y:.2f} ft MLLW<extra></extra>"
           },
           {
-            x: fcstLineX,
-            y: fcstLineY,
-            mode: "lines",
-            name: "Forecast water level",
-            line: { width: 5, color: "#1f77b4" },
-            connectgaps: false,
-            hovertemplate:
-              "Forecast<br>%{x}<br>%{y:.2f} ft MLLW<extra></extra>"
-          },
-          {
-            x: [times[0], times[times.length - 1]],
+            x: [firstTime, lastTime],
             y: [floodThreshold, floodThreshold],
             mode: "lines",
             name: `Flood criteria (${floodThreshold.toFixed(2)} ft MLLW)`,
-            line: { width: 3, color: "#2c7fb8", dash: "solid" },
-            hovertemplate:
-              "Flood criteria: %{y:.2f} ft MLLW<extra></extra>"
+            line: { width: 3, color: "#2c7fb8" },
+            hovertemplate: "Flood criteria: %{y:.2f} ft MLLW<extra></extra>"
           }
         ];
 
@@ -219,30 +182,24 @@
             text: `${stationName} Water Levels`,
             font: { size: 28 }
           },
-          paper_bgcolor: "#f7f7f7",
-          plot_bgcolor: "#f7f7f7",
+          paper_bgcolor: "#f4f4f4",
+          plot_bgcolor: "#f4f4f4",
           hovermode: "x unified",
-          margin: { l: 80, r: 40, t: 80, b: 90 },
+          margin: { l: 80, r: 40, t: 80, b: 120 },
           xaxis: {
-            title: {
-              text: "Time (CDT/CST)",
-              font: { size: 18 }
-            },
+            title: { text: "Time (CDT/CST)", font: { size: 18 } },
             tickfont: { size: 14 },
             gridcolor: "rgba(0,0,0,0.08)"
           },
           yaxis: {
-            title: {
-              text: "Water level (feet, MLLW)",
-              font: { size: 18 }
-            },
+            title: { text: "Water level (feet, MLLW)", font: { size: 18 } },
             tickfont: { size: 14 },
             gridcolor: "rgba(0,0,0,0.08)"
           },
           legend: {
             x: 0.01,
             y: 0.99,
-            bgcolor: "rgba(255,255,255,0.75)",
+            bgcolor: "rgba(255,255,255,0.8)",
             bordercolor: "rgba(0,0,0,0.15)",
             borderwidth: 1,
             font: { size: 14 }
@@ -252,7 +209,7 @@
               xref: "paper",
               yref: "paper",
               x: 0,
-              y: -0.2,
+              y: -0.18,
               xanchor: "left",
               align: "left",
               showarrow: false,
@@ -266,12 +223,14 @@
           ]
         };
 
-        Plotly.newPlot("chart", traces, layout, { responsive: true });
+        Plotly.newPlot("chart", traces, layout, {
+          responsive: true,
+          displaylogo: false
+        });
       },
       error: function(err) {
         document.getElementById("chart").innerHTML =
-          "<p style='color:red;font-weight:bold;'>Failed to load CSV: " +
-          err.message + "</p>";
+          "<p style='color:red;font-weight:bold;'>Failed to load CSV: " + err.message + "</p>";
       }
     });
   </script>
