@@ -24,7 +24,8 @@
   <script>
     const stationName = "New Canal Station, LA";
     const floodThreshold = 2.00; // ft MLLW
-    const csvUrl = "data/new_canal.csv";
+    const csvUrl = "data/new_canal.csv?v=4";
+    const observedHoursBack = 72;
 
     function parsePetssTime(s) {
       s = String(s).trim();
@@ -63,7 +64,7 @@
         // Remove header row
         const dataRows = rows.slice(1);
 
-        // Actual column map from your file
+        // Column map from your CSV
         const COL_TIME = 0;
         const COL_TIDE = 1;
         const COL_OB = 2;
@@ -75,12 +76,9 @@
         const COL_SURGE10P = 8;
         const COL_TWL10P = 9;
 
-        const xObserved = [];
-        const yObserved = [];
-
+        const tempObserved = [];
         const xForecast = [];
         const yForecast = [];
-
         const xBand = [];
         const yBandTop = [];
         const yBandBottom = [];
@@ -97,8 +95,7 @@
           const twl10 = toNumber(row[COL_TWL10P]);
 
           if (ob !== null) {
-            xObserved.push(dt);
-            yObserved.push(ob);
+            tempObserved.push({ dt, ob });
           }
 
           if (twl !== null) {
@@ -113,23 +110,62 @@
           }
         }
 
+        const xObserved = [];
+        const yObserved = [];
+
+        let latestObservedTime = null;
+        if (tempObserved.length > 0) {
+          latestObservedTime = tempObserved[tempObserved.length - 1].dt;
+        }
+
+        const observedCutoffTime = latestObservedTime
+          ? new Date(latestObservedTime.getTime() - observedHoursBack * 60 * 60 * 1000)
+          : null;
+
+        for (const item of tempObserved) {
+          if (!observedCutoffTime || item.dt >= observedCutoffTime) {
+            xObserved.push(item.dt);
+            yObserved.push(item.ob);
+          }
+        }
+
         if (xForecast.length === 0 && xObserved.length === 0) {
           document.getElementById("chart").innerHTML =
             "<p style='color:red;font-weight:bold;'>CSV loaded, but no TWL or OB values were found.</p>";
           return;
         }
 
-        const firstTime =
-          xObserved.length > 0 && xForecast.length > 0
-            ? new Date(Math.min(xObserved[0].getTime(), xForecast[0].getTime()))
-            : (xObserved.length > 0 ? xObserved[0] : xForecast[0]);
-
-        const lastTime =
-          xObserved.length > 0 && xForecast.length > 0
-            ? new Date(Math.max(xObserved[xObserved.length - 1].getTime(), xForecast[xForecast.length - 1].getTime()))
-            : (xObserved.length > 0 ? xObserved[xObserved.length - 1] : xForecast[xForecast.length - 1]);
+        const allTimes = [...xObserved, ...xForecast].sort((a, b) => a - b);
+        const firstTime = allTimes[0];
+        const lastTime = allTimes[allTimes.length - 1];
 
         const traces = [
+          {
+            x: [firstTime, lastTime],
+            y: [floodThreshold, floodThreshold],
+            mode: "lines",
+            name: `Flood Advisory criteria (${floodThreshold.toFixed(2)} ft MLLW)`,
+            line: { width: 3, color: "#ff7f0e" },
+            hovertemplate: "Flood criteria: %{y:.2f} ft MLLW<extra></extra>"
+          },
+          {
+            x: xObserved,
+            y: yObserved,
+            mode: "lines",
+            name: "Observed water level",
+            line: { width: 4, color: "#2ca02c" },
+            connectgaps: false,
+            hovertemplate: "Observed<br>%{x}<br>%{y:.2f} ft MLLW<extra></extra>"
+          },
+          {
+            x: xForecast,
+            y: yForecast,
+            mode: "lines",
+            name: "Forecast water level",
+            line: { width: 4, color: "#1f77b4" },
+            connectgaps: false,
+            hovertemplate: "Forecast<br>%{x}<br>%{y:.2f} ft MLLW<extra></extra>"
+          },
           {
             x: xBand,
             y: yBandTop,
@@ -146,34 +182,8 @@
             line: { color: "rgba(0,0,0,0)" },
             fill: "tonexty",
             fillcolor: "rgba(31,119,180,0.18)",
-            name: "10th–90th percentile range",
+            name: "10th-90th percentile range",
             hovertemplate: "10th percentile: %{y:.2f} ft MLLW<extra></extra>"
-          },
-          {
-            x: xForecast,
-            y: yForecast,
-            mode: "lines",
-            name: "Forecast water level",
-            line: { width: 4, color: "#1f77b4" },
-            connectgaps: false,
-            hovertemplate: "Forecast<br>%{x}<br>%{y:.2f} ft MLLW<extra></extra>"
-          },
-          {
-            x: xObserved,
-            y: yObserved,
-            mode: "lines",
-            name: "Observed water level",
-            line: { width: 4, color: "#2ca02c" },
-            connectgaps: false,
-            hovertemplate: "Observed<br>%{x}<br>%{y:.2f} ft MLLW<extra></extra>"
-          },
-          {
-            x: [firstTime, lastTime],
-            y: [floodThreshold, floodThreshold],
-            mode: "lines",
-            name: `Flood Advisory criteria (${floodThreshold.toFixed(2)} ft MLLW)`,
-            line: { width: 3, color: "#ff7f0e" },
-            hovertemplate: "Flood criteria: %{y:.2f} ft MLLW<extra></extra>"
           }
         ];
 
@@ -185,7 +195,7 @@
           paper_bgcolor: "#f4f4f4",
           plot_bgcolor: "#f4f4f4",
           hovermode: "x unified",
-          margin: { l: 80, r: 40, t: 80, b: 120 },
+          margin: { l: 80, r: 40, t: 80, b: 170 },
           xaxis: {
             title: { text: "Time (CDT/CST)", font: { size: 18 } },
             tickfont: { size: 14 },
@@ -198,10 +208,13 @@
           },
           legend: {
             x: 0.01,
-            y: 0.99,
-            bgcolor: "rgba(255,255,255,0.8)",
-            bordercolor: "rgba(0,0,0,0.15)",
-            borderwidth: 1,
+            y: -0.08,
+            xanchor: "left",
+            yanchor: "top",
+            orientation: "h",
+            bgcolor: "rgba(255,255,255,0)",
+            bordercolor: "rgba(0,0,0,0)",
+            borderwidth: 0,
             font: { size: 14 }
           },
           annotations: [
@@ -209,7 +222,7 @@
               xref: "paper",
               yref: "paper",
               x: 0,
-              y: -0.18,
+              y: -0.30,
               xanchor: "left",
               align: "left",
               showarrow: false,
