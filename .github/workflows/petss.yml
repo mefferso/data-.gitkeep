@@ -2,7 +2,7 @@ name: Fetch PETSS Data
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # every 30 minutes
+    - cron: "*/30 * * * *"
   workflow_dispatch:
 
 jobs:
@@ -11,40 +11,74 @@ jobs:
 
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Download PETSS data
+      - name: Download latest likely PETSS archive
         run: |
+          set -e
+
+          mkdir -p downloads extracted data
+
           DATE=$(date -u +%Y%m%d)
-          HOUR=$(date -u +%H)
 
-          BASE_URL="https://nomads.ncep.noaa.gov/pub/data/nccf/com/petss/prod/petss.${DATE}"
+          for HH in 18 12 06 00; do
+            FILE="petss.t${HH}z.gefs_csv.tar.gz"
+            URL="https://nomads.ncep.noaa.gov/pub/data/nccf/com/petss/prod/petss.${DATE}/${FILE}"
 
-          FILE="petss.t${HOUR}z.gefs_csv.tar.gz"
+            echo "Trying $URL"
 
-          echo "Downloading $BASE_URL/$FILE"
+            if curl -f -L "$URL" -o "downloads/$FILE"; then
+              echo "Downloaded $FILE"
+              echo "ARCHIVE=downloads/$FILE" >> $GITHUB_ENV
+              break
+            fi
+          done
 
-          curl -O $BASE_URL/$FILE || echo "File not found, trying fallback..."
+          if [ -z "${ARCHIVE:-}" ] && [ ! -f downloads/*.tar.gz ]; then
+            echo "No PETSS archive found for today's cycles."
+            exit 1
+          fi
 
-      - name: Extract files
+      - name: Extract archive
         run: |
-          mkdir extracted
-          tar -xzf *.tar.gz -C extracted || echo "No tar file found"
+          set -e
+          tar -xzf downloads/*.tar.gz -C extracted
+          echo "Extracted files:"
+          find extracted -type f | head -100
 
-      - name: Find New Canal station
+      - name: Look for New Canal content
         run: |
-          FILE=$(grep -rl "8761927" extracted | head -n 1)
+          set -e
+          echo "Searching extracted files for 8761927..."
+          grep -Rin "8761927" extracted || true
 
-          echo "Found file: $FILE"
+          echo "Searching filenames for 8761927..."
+          find extracted -type f | grep "8761927" || true
 
+      - name: Save matching file if found
+        run: |
+          set -e
+
+          FILE=$(grep -Ril "8761927" extracted | head -n 1 || true)
+
+          if [ -z "$FILE" ]; then
+            FILE=$(find extracted -type f | grep "8761927" | head -n 1 || true)
+          fi
+
+          if [ -z "$FILE" ]; then
+            echo "Could not find a file containing station 8761927."
+            exit 1
+          fi
+
+          echo "Using file: $FILE"
           cp "$FILE" data/new_canal.csv
 
       - name: Commit updated CSV
         run: |
+          set -e
           git config user.name "github-actions"
           git config user.email "actions@github.com"
 
           git add data/new_canal.csv
-          git commit -m "Update PETSS data" || echo "No changes"
-
+          git commit -m "Update PETSS data" || echo "No changes to commit"
           git push
