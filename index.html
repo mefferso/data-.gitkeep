@@ -181,8 +181,6 @@
   <script>
     const observedHoursBack = 72;
 
-    // This page expects one CSV per station in /data named by station ID:
-    // data/8747437.csv, data/8760922.csv, etc.
     const STATIONS = {
       "8747437": {
         id: "8747437",
@@ -312,7 +310,6 @@
 
           const dataRows = rows.slice(1);
 
-          // Expected columns from PETSS CSV
           const COL_TIME = 0;
           const COL_TIDE = 1;
           const COL_OB = 2;
@@ -369,18 +366,24 @@
             return !observedCutoffTime || item.dt >= observedCutoffTime;
           });
 
+          // Only show forecast/band from current date-time forward
+          const now = new Date();
+
+          const filteredForecast = forecast.filter(item => item.dt >= now);
+          const filteredBand = band.filter(item => item.dt >= now);
+
           const xObserved = filteredObserved.map(d => d.dt);
           const yObserved = filteredObserved.map(d => d.value);
 
-          const xForecast = forecast.map(d => d.dt);
-          const yForecast = forecast.map(d => d.value);
+          const xForecast = filteredForecast.map(d => d.dt);
+          const yForecast = filteredForecast.map(d => d.value);
 
-          const xBand = band.map(d => d.dt);
-          const yBandTop = band.map(d => d.high);
-          const yBandBottom = band.map(d => d.low);
+          const xBand = filteredBand.map(d => d.dt);
+          const yBandTop = filteredBand.map(d => d.high);
+          const yBandBottom = filteredBand.map(d => d.low);
 
           if (xObserved.length === 0 && xForecast.length === 0) {
-            chartEl.innerHTML = "<p style='padding:20px;color:#b42318;font-weight:bold;'>CSV loaded, but no observed or forecast water level values were found.</p>";
+            chartEl.innerHTML = "<p style='padding:20px;color:#b42318;font-weight:bold;'>CSV loaded, but no observed or future forecast water level values were found.</p>";
             setStatus(`No plotted data found for ${station.name}.`, true);
             return;
           }
@@ -489,8 +492,7 @@
                 showarrow: false,
                 text:
                   "Observed line shows only the most recent 72 hours. " +
-                  "Forecast line shows PETSS total water level guidance. " +
-                  "Shaded band shows the 10th to 90th percentile range.",
+                  "Forecast line and shaded range begin at the current date/time.",
                 font: { size: 14, color: "#364152" }
               }
             ]
