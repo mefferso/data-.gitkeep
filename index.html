@@ -173,14 +173,14 @@
       <div id="status"></div>
       <div id="chart"></div>
       <div class="footer-note">
-        Observed line = measured water level. Forecast line = expected total water level. Shaded band = likely range (10th to 90th percentile).
+        Observed line = measured water level. Forecast line = expected total water level.
+        Shaded band = likely range (10th to 90th percentile).
       </div>
     </div>
   </div>
 
   <script>
     const observedHoursBack = 72;
-
     const STATIONS = {
       "8747437": {
         id: "8747437",
@@ -225,7 +225,6 @@
         file: "data/8761927.csv"
       }
     };
-
     const DEFAULT_STATION_ID = "8761927";
 
     const stationSelect = document.getElementById("stationSelect");
@@ -235,7 +234,6 @@
 
     function populateStationDropdown() {
       const stationList = Object.values(STATIONS).sort((a, b) => a.name.localeCompare(b.name));
-
       for (const station of stationList) {
         const opt = document.createElement("option");
         opt.value = station.id;
@@ -260,7 +258,6 @@
       const day = Number(s.slice(6, 8));
       const hour = Number(s.slice(8, 10));
       const minute = Number(s.slice(10, 12));
-
       const dt = new Date(Date.UTC(year, month, day, hour, minute));
       return Number.isNaN(dt.getTime()) ? null : dt;
     }
@@ -294,7 +291,6 @@
       setStatus(`Loading ${station.name}...`);
 
       chartEl.innerHTML = "";
-
       Papa.parse(`${station.file}?v=${Date.now()}`, {
         download: true,
         dynamicTyping: false,
@@ -311,14 +307,9 @@
           const dataRows = rows.slice(1);
 
           const COL_TIME = 0;
-          const COL_TIDE = 1;
           const COL_OB = 2;
-          const COL_SURGE = 3;
-          const COL_BIAS = 4;
           const COL_TWL = 5;
-          const COL_SURGE90P = 6;
           const COL_TWL90P = 7;
-          const COL_SURGE10P = 8;
           const COL_TWL10P = 9;
 
           const observed = [];
@@ -361,17 +352,16 @@
           const observedCutoffTime = latestObservedTime
             ? new Date(latestObservedTime.getTime() - observedHoursBack * 60 * 60 * 1000)
             : null;
-
+            
           const filteredObserved = observed.filter(item => {
             return !observedCutoffTime || item.dt >= observedCutoffTime;
           });
-
+          
           // Only show forecast/band from current date-time forward
           const now = new Date();
-
           const filteredForecast = forecast.filter(item => item.dt >= now);
           const filteredBand = band.filter(item => item.dt >= now);
-
+          
           const xObserved = filteredObserved.map(d => d.dt);
           const yObserved = filteredObserved.map(d => d.value);
 
@@ -388,10 +378,41 @@
             return;
           }
 
+          // --- PEAK DETECTION LOGIC ---
+          const peaks = [];
+          // Find local maxima in the future forecast
+          for (let i = 3; i < filteredForecast.length - 3; i++) {
+            let isLocalMax = true;
+            for (let j = 1; j <= 3; j++) {
+              if (filteredForecast[i].value <= filteredForecast[i-j].value || filteredForecast[i].value <= filteredForecast[i+j].value) {
+                isLocalMax = false;
+                break;
+              }
+            }
+
+            // If it's a peak AND within 0.5 ft of the flood threshold
+            if (isLocalMax && filteredForecast[i].value >= (station.thresholdMLLW - 0.5)) {
+              // Ensure peaks are separated by at least 8 hours to avoid double-counting
+              if (peaks.length === 0 || (filteredForecast[i].dt - peaks[peaks.length-1].dt) > 8 * 3600 * 1000) {
+                peaks.push(filteredForecast[i]);
+              }
+            }
+          }
+
+          // Helper to format hours like "4PM"
+          const getHrStr = (dt) => {
+            let h = dt.getHours();
+            const ampm = h >= 12 ? 'PM' : 'AM';
+            h = h % 12;
+            return `${h === 0 ? 12 : h}${ampm}`;
+          };
+          const daysArr = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          // ----------------------------
+
           const allTimes = [...xObserved, ...xForecast].sort((a, b) => a - b);
           const firstTime = allTimes[0];
           const lastTime = allTimes[allTimes.length - 1];
-
+          
           const traces = [
             {
               x: [firstTime, lastTime],
@@ -437,6 +458,15 @@
               fillcolor: "rgba(31,119,180,0.18)",
               name: "10th-90th percentile range",
               hovertemplate: `10th percentile<br>%{x}<br>%{y:.2f} ft ${station.datum}<extra></extra>`
+            },
+            {
+              x: peaks.map(p => p.dt),
+              y: peaks.map(p => p.value),
+              mode: "markers",
+              name: "Peak Tides",
+              marker: { color: "red", size: 10 },
+              showlegend: false,
+              hoverinfo: "skip"
             }
           ];
 
@@ -460,6 +490,7 @@
             margin: { l: 80, r: 36, t: 95, b: 170 },
             xaxis: {
               title: { text: "Time (browser local time)", font: { size: 18 } },
+              tickformat: "%a, %b %-d",
               tickfont: { size: 14 },
               gridcolor: "rgba(0,0,0,0.08)",
               zeroline: false
@@ -490,13 +521,60 @@
                 xanchor: "left",
                 align: "left",
                 showarrow: false,
-                text:
-                  "Observed line shows only the most recent 72 hours. " +
-                  "Forecast line and shaded range begin at the current date/time.",
+                text: "Observed line shows only the most recent 72 hours.\nForecast line and shaded range begin at the current date/time.",
                 font: { size: 14, color: "#364152" }
+              },
+              {
+                xref: "paper",
+                yref: "y",
+                x: 0.01, 
+                y: station.thresholdMLLW,
+                xanchor: "left",
+                yanchor: "bottom",
+                text: "<b>Minor Coastal Flooding</b>",
+                showarrow: false,
+                font: { color: "#ff7f0e", size: 13 },
+                yshift: 4
               }
             ]
           };
+
+          // Dynamically add peak callouts to the layout
+          peaks.forEach(p => {
+            const tPeak = p.dt;
+            const tStart = new Date(tPeak.getTime() - 2 * 3600 * 1000); // 2 hours prior
+            const tEnd = new Date(tPeak.getTime() + 2 * 3600 * 1000);   // 2 hours after
+            const dayStr = daysArr[tPeak.getDay()];
+
+            // The point label (e.g., Peak: 3.30 ft MLLW 4PM Tue)
+            layout.annotations.push({
+              x: p.dt,
+              y: p.value,
+              text: `<b>Peak: ${p.value.toFixed(2)} ft ${station.datum}</b><br>${getHrStr(tPeak)} ${dayStr}`,
+              showarrow: true,
+              arrowhead: 0,
+              ax: 0,
+              ay: -40,
+              bgcolor: "#6baed6",
+              bordercolor: "#3182bd",
+              font: { color: "#000", size: 12 },
+              borderpad: 4
+            });
+
+            // The top window label (e.g., Peak tide window 2PM - 6PM Tue)
+            layout.annotations.push({
+              x: p.dt,
+              y: 0.98,
+              yref: "paper",
+              text: `<b>Peak tide<br>window</b><br>${getHrStr(tStart)} - <br>${getHrStr(tEnd)} ${dayStr}`,
+              showarrow: false,
+              bgcolor: "#6baed6",
+              bordercolor: "#3182bd",
+              font: { color: "#000", size: 12 },
+              borderpad: 4,
+              yanchor: "top"
+            });
+          });
 
           Plotly.newPlot("chart", traces, layout, {
             responsive: true,
