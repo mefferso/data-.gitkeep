@@ -22,6 +22,9 @@ jobs:
           set -euo pipefail
 
           mkdir -p downloads extracted data
+          rm -f downloads/*
+          rm -rf extracted/*
+          rm -f data/new_canal.csv data/new_canal_raw.csv
 
           DATE=$(date -u +%Y%m%d)
           FOUND=""
@@ -32,7 +35,7 @@ jobs:
 
             echo "Trying $URL"
 
-            if curl -f -L --retry 3 --retry-delay 5 "$URL" -o "downloads/$FILE"; then
+            if curl -f -L --retry 3 --retry-delay 5 --connect-timeout 30 "$URL" -o "downloads/$FILE"; then
               echo "Downloaded $FILE"
               FOUND="downloads/$FILE"
               break
@@ -44,13 +47,41 @@ jobs:
             exit 1
           fi
 
+          echo "Archive path: $FOUND"
+          ls -lh "$FOUND"
+          file "$FOUND"
+
+      - name: Validate archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          ARCHIVE=$(find downloads -maxdepth 1 -name "*.tar.gz" | head -n 1)
+
+          if [ -z "$ARCHIVE" ]; then
+            echo "No archive found in downloads folder."
+            exit 1
+          fi
+
+          echo "Testing archive: $ARCHIVE"
+          gzip -t "$ARCHIVE"
+          tar -tzf "$ARCHIVE" > /tmp/petss_contents.txt
+
+          echo "First 200 archive entries:"
+          head -200 /tmp/petss_contents.txt
+
       - name: Extract archive
         shell: bash
         run: |
           set -euo pipefail
-          tar -xzf downloads/*.tar.gz -C extracted
+
+          ARCHIVE=$(find downloads -maxdepth 1 -name "*.tar.gz" | head -n 1)
+
+          mkdir -p extracted
+          tar -xzf "$ARCHIVE" -C extracted
+
           echo "Extracted files:"
-          find extracted -type f | sed 's/^/ - /' | head -200
+          find extracted -type f | sed 's/^/ - /' | head -300
 
       - name: Find New Canal station file
         shell: bash
@@ -90,7 +121,7 @@ jobs:
               f_in.seek(0)
 
               try:
-                  dialect = csv.Sniffer().sniff(sample, delimiters=", \t")
+                  dialect = csv.Sniffer().sniff(sample, delimiters=",\t ")
               except Exception:
                   class SimpleDialect(csv.excel):
                       delimiter = ","
@@ -103,7 +134,7 @@ jobs:
                   cleaned = []
                   for cell in row:
                       v = cell.strip()
-                      if v == "9999.000" or v == "9999":
+                      if v in ("9999.000", "9999"):
                           cleaned.append("")
                       else:
                           cleaned.append(v)
@@ -111,6 +142,8 @@ jobs:
           PY
 
           rm -f data/new_canal_raw.csv
+          echo "Created data/new_canal.csv"
+          ls -lh data/new_canal.csv
 
       - name: Commit updated CSV
         shell: bash
