@@ -546,33 +546,19 @@
             const tEnd = new Date(tPeak.getTime() + 2 * 3600 * 1000);   // 2 hours after
             const dayStr = daysArr[tPeak.getDay()];
 
-            // The point label (e.g., Peak: 3.30 ft MLLW 4PM Tue)
+            // Combined point label 
             layout.annotations.push({
               x: p.dt,
               y: p.value,
-              text: `<b>Peak: ${p.value.toFixed(2)} ft ${station.datum}</b><br>${getHrStr(tPeak)} ${dayStr}`,
+              text: `<b>Peak: ${p.value.toFixed(2)} ft ${station.datum}</b><br>${getHrStr(tPeak)} ${dayStr}<br><b>Window:</b> ${getHrStr(tStart)} - ${getHrStr(tEnd)}`,
               showarrow: true,
               arrowhead: 0,
               ax: 0,
-              ay: -40,
+              ay: -55,
               bgcolor: "#6baed6",
               bordercolor: "#3182bd",
               font: { color: "#000", size: 12 },
               borderpad: 4
-            });
-
-            // The top window label (e.g., Peak tide window 2PM - 6PM Tue)
-            layout.annotations.push({
-              x: p.dt,
-              y: 0.98,
-              yref: "paper",
-              text: `<b>Peak tide<br>window</b><br>${getHrStr(tStart)} - <br>${getHrStr(tEnd)} ${dayStr}`,
-              showarrow: false,
-              bgcolor: "#6baed6",
-              bordercolor: "#3182bd",
-              font: { color: "#000", size: 12 },
-              borderpad: 4,
-              yanchor: "top"
             });
           });
 
