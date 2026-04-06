@@ -73,6 +73,12 @@
       dynamicTyping: false,
       skipEmptyLines: true,
       complete: function(results) {
+      console.log("First 10 parsed rows:", results.data.slice(0, 10));
+      document.getElementById("chart").innerHTML =
+        "<pre style='font-size:14px; white-space:pre-wrap;'>" +
+        JSON.stringify(results.data.slice(0, 10), null, 2) +
+        "</pre>";
+      return;
         const rows = results.data;
 
         // --------------------------------------------------
