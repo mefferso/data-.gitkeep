@@ -5,6 +5,9 @@ on:
     - cron: "*/30 * * * *"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   fetch:
     runs-on: ubuntu-latest
@@ -14,12 +17,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Download latest likely PETSS archive
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
           mkdir -p downloads extracted data
 
           DATE=$(date -u +%Y%m%d)
+          FOUND=""
 
           for HH in 18 12 06 00; do
             FILE="petss.t${HH}z.gefs_csv.tar.gz"
@@ -27,37 +32,30 @@ jobs:
 
             echo "Trying $URL"
 
-            if curl -f -L "$URL" -o "downloads/$FILE"; then
+            if curl -f -L --retry 3 --retry-delay 5 "$URL" -o "downloads/$FILE"; then
               echo "Downloaded $FILE"
-              echo "ARCHIVE=downloads/$FILE" >> $GITHUB_ENV
+              FOUND="downloads/$FILE"
               break
             fi
           done
 
-          if [ -z "${ARCHIVE:-}" ] && [ ! -f downloads/*.tar.gz ]; then
-            echo "No PETSS archive found for today's cycles."
+          if [ -z "$FOUND" ]; then
+            echo "No PETSS archive found for today's 00/06/12/18Z cycles."
             exit 1
           fi
 
       - name: Extract archive
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
           tar -xzf downloads/*.tar.gz -C extracted
           echo "Extracted files:"
-          find extracted -type f | head -100
+          find extracted -type f | sed 's/^/ - /' | head -200
 
-      - name: Look for New Canal content
+      - name: Find New Canal station file
+        shell: bash
         run: |
-          set -e
-          echo "Searching extracted files for 8761927..."
-          grep -Rin "8761927" extracted || true
-
-          echo "Searching filenames for 8761927..."
-          find extracted -type f | grep "8761927" || true
-
-      - name: Save matching file if found
-        run: |
-          set -e
+          set -euo pipefail
 
           FILE=$(grep -Ril "8761927" extracted | head -n 1 || true)
 
@@ -67,18 +65,67 @@ jobs:
 
           if [ -z "$FILE" ]; then
             echo "Could not find a file containing station 8761927."
+            echo "Nearby candidates:"
+            find extracted -type f | head -100
             exit 1
           fi
 
           echo "Using file: $FILE"
-          cp "$FILE" data/new_canal.csv
+          cp "$FILE" data/new_canal_raw.csv
+
+      - name: Clean missing values and save final CSV
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import csv
+          from pathlib import Path
+
+          infile = Path("data/new_canal_raw.csv")
+          outfile = Path("data/new_canal.csv")
+
+          with infile.open("r", newline="") as f_in, outfile.open("w", newline="") as f_out:
+              sample = f_in.read(4096)
+              f_in.seek(0)
+
+              try:
+                  dialect = csv.Sniffer().sniff(sample, delimiters=", \t")
+              except Exception:
+                  class SimpleDialect(csv.excel):
+                      delimiter = ","
+                  dialect = SimpleDialect
+
+              reader = csv.reader(f_in, dialect)
+              writer = csv.writer(f_out)
+
+              for row in reader:
+                  cleaned = []
+                  for cell in row:
+                      v = cell.strip()
+                      if v == "9999.000" or v == "9999":
+                          cleaned.append("")
+                      else:
+                          cleaned.append(v)
+                  writer.writerow(cleaned)
+          PY
+
+          rm -f data/new_canal_raw.csv
 
       - name: Commit updated CSV
+        shell: bash
         run: |
-          set -e
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add data/new_canal.csv
-          git commit -m "Update PETSS data" || echo "No changes to commit"
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Update PETSS New Canal CSV"
           git push
