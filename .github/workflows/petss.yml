@@ -1,0 +1,50 @@
+name: Fetch PETSS Data
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 minutes
+  workflow_dispatch:
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Download PETSS data
+        run: |
+          DATE=$(date -u +%Y%m%d)
+          HOUR=$(date -u +%H)
+
+          BASE_URL="https://nomads.ncep.noaa.gov/pub/data/nccf/com/petss/prod/petss.${DATE}"
+
+          FILE="petss.t${HOUR}z.gefs_csv.tar.gz"
+
+          echo "Downloading $BASE_URL/$FILE"
+
+          curl -O $BASE_URL/$FILE || echo "File not found, trying fallback..."
+
+      - name: Extract files
+        run: |
+          mkdir extracted
+          tar -xzf *.tar.gz -C extracted || echo "No tar file found"
+
+      - name: Find New Canal station
+        run: |
+          FILE=$(grep -rl "8761927" extracted | head -n 1)
+
+          echo "Found file: $FILE"
+
+          cp "$FILE" data/new_canal.csv
+
+      - name: Commit updated CSV
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+
+          git add data/new_canal.csv
+          git commit -m "Update PETSS data" || echo "No changes"
+
+          git push
