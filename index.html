@@ -25,7 +25,7 @@
     body {
       margin: 0;
       padding: 24px;
-      font-family: Arial, sans-serif;
+      font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       background: linear-gradient(180deg, #eef3f8 0%, #f7f9fc 100%);
       color: var(--text);
     }
@@ -92,7 +92,6 @@
       box-shadow: 0 0 0 3px rgba(31, 119, 180, 0.12);
     }
 
-    /* New Button Styles */
     .btn {
       padding: 12px 18px;
       font-size: 14px;
@@ -172,7 +171,7 @@
             <label for="stationSelect">Select station</label>
             <select id="stationSelect"></select>
           </div>
-          
+
           <div class="control-group" style="min-width: auto;">
             <button id="downloadBtn" class="btn">Download PNG</button>
           </div>
@@ -294,6 +293,107 @@
       });
     }
 
+    function formatHour(dt) {
+      let s = dt.toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit"
+      });
+      return s.replace(":00", "");
+    }
+
+    function formatPeakTime(dt) {
+      const day = dt.toLocaleDateString([], { weekday: "short" });
+      return `${day} ${formatHour(dt)}`;
+    }
+
+    function getTimeFraction(dt, start, end) {
+      const span = end.getTime() - start.getTime();
+      if (span <= 0) return 0.5;
+      return (dt.getTime() - start.getTime()) / span;
+    }
+
+    function getPeakPlacement(index, peak, firstTime, lastTime, yMin, yMax) {
+      const xFrac = getTimeFraction(peak.dt, firstTime, lastTime);
+      const yFrac = (yMax - yMin) > 0 ? (peak.value - yMin) / (yMax - yMin) : 0.5;
+
+      let ax = 0;
+      let ay = -86;
+      let xanchor = "center";
+      let yanchor = "bottom";
+
+      if (xFrac <= 0.16) {
+        ax = 90;
+        xanchor = "left";
+      } else if (xFrac >= 0.84) {
+        ax = -90;
+        xanchor = "right";
+      } else {
+        const cycle = [
+          { ax: -95, ay: -78 },
+          { ax: 0, ay: -108 },
+          { ax: 95, ay: -78 },
+          { ax: -75, ay: -128 },
+          { ax: 75, ay: -128 }
+        ][index % 5];
+
+        ax = cycle.ax;
+        ay = cycle.ay;
+      }
+
+      if (yFrac >= 0.80) {
+        ay = 86;
+        yanchor = "top";
+
+        if (xFrac <= 0.16) {
+          ax = 90;
+          xanchor = "left";
+        } else if (xFrac >= 0.84) {
+          ax = -90;
+          xanchor = "right";
+        } else {
+          ax = index % 2 === 0 ? -80 : 80;
+        }
+      }
+
+      return { ax, ay, xanchor, yanchor };
+    }
+
+    function buildPeakAnnotation(peak, index, firstTime, lastTime, yMin, yMax) {
+      const tPeak = peak.dt;
+      const tStart = new Date(tPeak.getTime() - 2 * 3600 * 1000);
+      const tEnd = new Date(tPeak.getTime() + 2 * 3600 * 1000);
+      const pos = getPeakPlacement(index, peak, firstTime, lastTime, yMin, yMax);
+
+      return {
+        x: peak.dt,
+        y: peak.value,
+        xanchor: pos.xanchor,
+        yanchor: pos.yanchor,
+        align: "center",
+        showarrow: true,
+        arrowhead: 0,
+        arrowwidth: 1.4,
+        arrowcolor: "#000000",
+        ax: pos.ax,
+        ay: pos.ay,
+        standoff: 2,
+        bgcolor: "#5aa2ee",
+        bordercolor: "#000000",
+        borderwidth: 1,
+        borderpad: 4,
+        opacity: 1,
+        font: {
+          family: "Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+          color: "#000000",
+          size: 12
+        },
+        text:
+          `<span style="font-size:20px;font-weight:900;line-height:1;white-space:nowrap;">${formatPeakTime(tPeak)}</span><br>` +
+          `<span style="font-size:31px;font-weight:900;line-height:1.05;white-space:nowrap;">${peak.value.toFixed(1)} ft</span><br>` +
+          `<span style="font-size:11px;font-weight:500;color:rgba(0,0,0,0.72);white-space:nowrap;">Most likely between ${formatHour(tStart)} - ${formatHour(tEnd)}</span>`
+      };
+    }
+
     function loadStation(stationId) {
       const station = STATIONS[stationId];
       if (!station) {
@@ -303,6 +403,7 @@
 
       thresholdPill.innerHTML = `<strong>Flood threshold:</strong> ${station.thresholdMLLW.toFixed(2)} ft ${station.datum}`;
       chartEl.innerHTML = "";
+
       Papa.parse(`${station.file}?v=${Date.now()}`, {
         download: true,
         dynamicTyping: false,
@@ -338,6 +439,7 @@
             const twl = toNumber(row[COL_TWL]);
             const twl90 = toNumber(row[COL_TWL90P]);
             const twl10 = toNumber(row[COL_TWL10P]);
+
             if (ob !== null) observed.push({ dt, value: ob });
             if (twl !== null) forecast.push({ dt, value: twl });
             if (twl10 !== null && twl90 !== null) band.push({ dt, low: twl10, high: twl90 });
@@ -355,11 +457,13 @@
           const observedCutoffTime = latestObservedTime
             ? new Date(latestObservedTime.getTime() - observedHoursBack * 60 * 60 * 1000)
             : null;
+
           const filteredObserved = observed.filter(item => !observedCutoffTime || item.dt >= observedCutoffTime);
 
           const plotTransitionTime = latestObservedTime || new Date();
           const filteredForecast = forecast.filter(item => item.dt >= plotTransitionTime);
           const filteredBand = band.filter(item => item.dt >= plotTransitionTime);
+
           const xObserved = filteredObserved.map(d => d.dt);
           const yObserved = filteredObserved.map(d => d.value);
 
@@ -373,10 +477,12 @@
           const bandLookup = new Map(
             filteredBand.map(d => [d.dt.getTime(), { low: d.low, high: d.high }])
           );
+
           const customdataForecast = filteredForecast.map(d => {
             const match = bandLookup.get(d.dt.getTime());
             return match ? [match.low, match.high] : [null, null];
           });
+
           if (xObserved.length === 0 && xForecast.length === 0) {
             chartEl.innerHTML = "<p style='padding:20px;color:#b42318;font-weight:bold;'>CSV loaded, but no observed or future forecast water level values were found.</p>";
             setStatus(`No plotted data found for ${station.name}.`, true);
@@ -406,17 +512,21 @@
             }
           }
 
-          const getHrStr = (dt) => {
-            let h = dt.getHours();
-            const ampm = h >= 12 ? "PM" : "AM";
-            h = h % 12;
-            return `${h === 0 ? 12 : h}${ampm}`;
-          };
-
-          const daysArr = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
           const allTimes = [...xObserved, ...xForecast].sort((a, b) => a - b);
           const firstTime = allTimes[0];
           const lastTime = allTimes[allTimes.length - 1];
+
+          const yCandidates = [
+            station.thresholdMLLW,
+            ...yObserved,
+            ...yForecast,
+            ...yBandTop,
+            ...yBandBottom
+          ].filter(v => Number.isFinite(v));
+
+          const yMin = yCandidates.length ? Math.min(...yCandidates) : 0;
+          const yMax = yCandidates.length ? Math.max(...yCandidates) : 1;
+
           const traces = [
             {
               x: [firstTime, lastTime],
@@ -452,7 +562,7 @@
               hovertemplate:
                 `%{x|%a, %b %-d, %-I:%M %p}` +
                 `<br>Expected water level: %{y:.2f} ft ${station.datum}` +
-                `<br>Possible range: %{customdata[1]:.2f} – %{customdata[0]:.2f} ft ${station.datum}` +
+                `<br>Possible range: %{customdata[0]:.2f} – %{customdata[1]:.2f} ft ${station.datum}` +
                 `<extra></extra>`
             },
             {
@@ -479,17 +589,22 @@
               y: peaks.map(p => p.value),
               mode: "markers",
               name: "Peak tides",
-              marker: { color: "red", size: 10 },
+              marker: { color: "red", size: 8 },
               showlegend: false,
               hoverinfo: "skip"
             }
           ];
+
           const subtitlePieces = [];
           if (latestObservedTime) {
             subtitlePieces.push(`Latest observed: ${fmtLocal(latestObservedTime)}`);
           }
 
           const layout = {
+            font: {
+              family: "Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+              color: "#15202b"
+            },
             title: {
               text:
                 `<b>${station.name} Water Levels</b><br>` +
@@ -499,7 +614,7 @@
             paper_bgcolor: "#ffffff",
             plot_bgcolor: "#ffffff",
             hovermode: "closest",
-            margin: { l: 80, r: 36, t: 95, b: 170 },
+            margin: { l: 80, r: 36, t: 155, b: 170 },
             xaxis: {
               tickformat: "%a, %b %-d",
               tickfont: { size: 14 },
@@ -538,29 +653,13 @@
               }
             ]
           };
-          peaks.forEach(p => {
-            const tPeak = p.dt;
-            const tStart = new Date(tPeak.getTime() - 2 * 3600 * 1000);
-            const tEnd = new Date(tPeak.getTime() + 2 * 3600 * 1000);
-            const dayStr = daysArr[tPeak.getDay()];
 
-            layout.annotations.push({
-              x: p.dt,
-              y: p.value,
-              text:
-                `<b>Peak: ${p.value.toFixed(2)} ft ${station.datum}</b><br>` +
-                `${getHrStr(tPeak)} ${dayStr}<br>` +
-                `<b>Window:</b> ${getHrStr(tStart)} - ${getHrStr(tEnd)}`,
-              showarrow: true,
-              arrowhead: 0,
-              ax: 0,
-              ay: -90, 
-              bgcolor: "#6baed6",
-              bordercolor: "#3182bd",
-              font: { color: "#000", size: 12 },
-              borderpad: 4
-            });
+          peaks.forEach((p, idx) => {
+            layout.annotations.push(
+              buildPeakAnnotation(p, idx, firstTime, lastTime, yMin, yMax)
+            );
           });
+
           Plotly.newPlot("chart", traces, layout, {
             responsive: true,
             displayModeBar: false,
@@ -575,22 +674,22 @@
     }
 
     populateStationDropdown();
+
     stationSelect.addEventListener("change", function() {
       loadStation(this.value);
     });
 
     loadStation(DEFAULT_STATION_ID);
 
-    // Download Button Logic
     const downloadBtn = document.getElementById("downloadBtn");
 
     downloadBtn.addEventListener("click", function() {
       const currentStationId = stationSelect.value;
-      const stationName = STATIONS[currentStationId].name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-      
+      const stationName = STATIONS[currentStationId].name.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+
       Plotly.downloadImage("chart", {
         format: "png",
-        width: 1200, 
+        width: 1200,
         height: 900,
         filename: `petss_water_level_${stationName}`
       });
