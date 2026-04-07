@@ -425,7 +425,7 @@
               name: `Flood criteria (${station.thresholdMLLW.toFixed(2)} ft ${station.datum})`,
               line: { width: 3, color: "#ff7f0e", dash: "solid" },
               hovertemplate:
-                `%{x|%a, %b %-d, %-I:%M %p} LST` +
+                `%{x|%a, %b %-d, %-I:%M %p}` +
                 `<br>Flood criteria: %{y:.2f} ft ${station.datum}` +
                 `<extra></extra>`
             },
@@ -437,7 +437,7 @@
               line: { width: 4, color: "#2ca02c" },
               connectgaps: false,
               hovertemplate:
-                `%{x|%a, %b %-d, %-I:%M %p} LST` +
+                `%{x|%a, %b %-d, %-I:%M %p}` +
                 `<br>Observed water level height: %{y:.2f} ft ${station.datum}` +
                 `<extra></extra>`
             },
@@ -450,7 +450,7 @@
               line: { width: 4, color: "#1f77b4" },
               connectgaps: false,
               hovertemplate:
-                `%{x|%a, %b %-d, %-I:%M %p} LST` +
+                `%{x|%a, %b %-d, %-I:%M %p}` +
                 `<br>Forecast water level height: %{y:.2f} ft ${station.datum}` +
                 `<br>10th percentile: %{customdata[0]:.2f} ft ${station.datum}` +
                 `<br>90th percentile: %{customdata[1]:.2f} ft ${station.datum}` +
