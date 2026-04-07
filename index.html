@@ -92,7 +92,6 @@
       box-shadow: 0 0 0 3px rgba(31, 119, 180, 0.12);
     }
 
-    /* New Button Styles */
     .btn {
       padding: 12px 18px;
       font-size: 14px;
@@ -172,7 +171,7 @@
             <label for="stationSelect">Select station</label>
             <select id="stationSelect"></select>
           </div>
-          
+
           <div class="control-group" style="min-width: auto;">
             <button id="downloadBtn" class="btn">Download PNG</button>
           </div>
@@ -303,6 +302,7 @@
 
       thresholdPill.innerHTML = `<strong>Flood threshold:</strong> ${station.thresholdMLLW.toFixed(2)} ft ${station.datum}`;
       chartEl.innerHTML = "";
+
       Papa.parse(`${station.file}?v=${Date.now()}`, {
         download: true,
         dynamicTyping: false,
@@ -338,6 +338,7 @@
             const twl = toNumber(row[COL_TWL]);
             const twl90 = toNumber(row[COL_TWL90P]);
             const twl10 = toNumber(row[COL_TWL10P]);
+
             if (ob !== null) observed.push({ dt, value: ob });
             if (twl !== null) forecast.push({ dt, value: twl });
             if (twl10 !== null && twl90 !== null) band.push({ dt, low: twl10, high: twl90 });
@@ -355,11 +356,13 @@
           const observedCutoffTime = latestObservedTime
             ? new Date(latestObservedTime.getTime() - observedHoursBack * 60 * 60 * 1000)
             : null;
+
           const filteredObserved = observed.filter(item => !observedCutoffTime || item.dt >= observedCutoffTime);
 
           const plotTransitionTime = latestObservedTime || new Date();
           const filteredForecast = forecast.filter(item => item.dt >= plotTransitionTime);
           const filteredBand = band.filter(item => item.dt >= plotTransitionTime);
+
           const xObserved = filteredObserved.map(d => d.dt);
           const yObserved = filteredObserved.map(d => d.value);
 
@@ -373,10 +376,12 @@
           const bandLookup = new Map(
             filteredBand.map(d => [d.dt.getTime(), { low: d.low, high: d.high }])
           );
+
           const customdataForecast = filteredForecast.map(d => {
             const match = bandLookup.get(d.dt.getTime());
             return match ? [match.low, match.high] : [null, null];
           });
+
           if (xObserved.length === 0 && xForecast.length === 0) {
             chartEl.innerHTML = "<p style='padding:20px;color:#b42318;font-weight:bold;'>CSV loaded, but no observed or future forecast water level values were found.</p>";
             setStatus(`No plotted data found for ${station.name}.`, true);
@@ -413,10 +418,19 @@
             return `${h === 0 ? 12 : h}${ampm}`;
           };
 
+          const getPeakTimeLabel = (dt) => {
+            return dt.toLocaleString([], {
+              weekday: "short",
+              hour: "numeric",
+              minute: "2-digit"
+            });
+          };
+
           const daysArr = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
           const allTimes = [...xObserved, ...xForecast].sort((a, b) => a - b);
           const firstTime = allTimes[0];
           const lastTime = allTimes[allTimes.length - 1];
+
           const traces = [
             {
               x: [firstTime, lastTime],
@@ -452,7 +466,7 @@
               hovertemplate:
                 `%{x|%a, %b %-d, %-I:%M %p}` +
                 `<br>Expected water level: %{y:.2f} ft ${station.datum}` +
-                `<br>Possible range: %{customdata[1]:.2f} – %{customdata[0]:.2f} ft ${station.datum}` +
+                `<br>Possible range: %{customdata[0]:.2f} – %{customdata[1]:.2f} ft ${station.datum}` +
                 `<extra></extra>`
             },
             {
@@ -484,6 +498,7 @@
               hoverinfo: "skip"
             }
           ];
+
           const subtitlePieces = [];
           if (latestObservedTime) {
             subtitlePieces.push(`Latest observed: ${fmtLocal(latestObservedTime)}`);
@@ -538,29 +553,35 @@
               }
             ]
           };
+
           peaks.forEach(p => {
             const tPeak = p.dt;
             const tStart = new Date(tPeak.getTime() - 2 * 3600 * 1000);
             const tEnd = new Date(tPeak.getTime() + 2 * 3600 * 1000);
-            const dayStr = daysArr[tPeak.getDay()];
 
             layout.annotations.push({
               x: p.dt,
               y: p.value,
+              xanchor: "center",
+              yanchor: "bottom",
+              align: "center",
               text:
-                `<b>Peak: ${p.value.toFixed(2)} ft ${station.datum}</b><br>` +
-                `${getHrStr(tPeak)} ${dayStr}<br>` +
-                `<b>Window:</b> ${getHrStr(tStart)} - ${getHrStr(tEnd)}`,
+                `<span style="font-size:17px;font-weight:700;color:#000000;">${getPeakTimeLabel(tPeak)}</span><br>` +
+                `<span style="font-size:22px;font-weight:800;color:#000000;">Peak water level: ${p.value.toFixed(1)} ft</span><br>` +
+                `<span style="font-size:11px;color:#4b5563;">Most likely between ${getHrStr(tStart)} - ${getHrStr(tEnd)}</span>`,
               showarrow: true,
               arrowhead: 0,
               ax: 0,
-              ay: -90, 
-              bgcolor: "#6baed6",
-              bordercolor: "#3182bd",
-              font: { color: "#000", size: 12 },
-              borderpad: 4
+              ay: -95,
+              bgcolor: "#4da3ff",
+              bordercolor: "#000000",
+              borderwidth: 1,
+              borderpad: 6,
+              opacity: 1,
+              font: { color: "#000000", size: 12 }
             });
           });
+
           Plotly.newPlot("chart", traces, layout, {
             responsive: true,
             displayModeBar: false,
@@ -575,22 +596,22 @@
     }
 
     populateStationDropdown();
+
     stationSelect.addEventListener("change", function() {
       loadStation(this.value);
     });
 
     loadStation(DEFAULT_STATION_ID);
 
-    // Download Button Logic
     const downloadBtn = document.getElementById("downloadBtn");
 
     downloadBtn.addEventListener("click", function() {
       const currentStationId = stationSelect.value;
-      const stationName = STATIONS[currentStationId].name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-      
+      const stationName = STATIONS[currentStationId].name.replace(/[^a-z0-9]/gi, "_").toLowerCase();
+
       Plotly.downloadImage("chart", {
         format: "png",
-        width: 1200, 
+        width: 1200,
         height: 900,
         filename: `petss_water_level_${stationName}`
       });
