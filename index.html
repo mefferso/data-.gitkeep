@@ -158,7 +158,7 @@
 
         <div class="meta">
           <div class="pill"><strong>Observed window:</strong> last 72 hours</div>
-          <div class="pill"><strong>Forecast band:</strong> 10th–90th percentile</div>
+          <div class="pill"><strong>Forecast band:</strong> likely range</div>
           <div class="pill"><strong>Datum:</strong> MLLW</div>
           <div class="pill" id="thresholdPill"><strong>Flood threshold:</strong> --</div>
         </div>
@@ -321,17 +321,9 @@
             const twl90 = toNumber(row[COL_TWL90P]);
             const twl10 = toNumber(row[COL_TWL10P]);
 
-            if (ob !== null) {
-              observed.push({ dt, value: ob });
-            }
-
-            if (twl !== null) {
-              forecast.push({ dt, value: twl });
-            }
-
-            if (twl10 !== null && twl90 !== null) {
-              band.push({ dt, low: twl10, high: twl90 });
-            }
+            if (ob !== null) observed.push({ dt, value: ob });
+            if (twl !== null) forecast.push({ dt, value: twl });
+            if (twl10 !== null && twl90 !== null) band.push({ dt, low: twl10, high: twl90 });
           }
 
           observed.sort((a, b) => a.dt - b.dt);
@@ -347,9 +339,7 @@
             ? new Date(latestObservedTime.getTime() - observedHoursBack * 60 * 60 * 1000)
             : null;
 
-          const filteredObserved = observed.filter(item => {
-            return !observedCutoffTime || item.dt >= observedCutoffTime;
-          });
+          const filteredObserved = observed.filter(item => !observedCutoffTime || item.dt >= observedCutoffTime);
 
           const plotTransitionTime = latestObservedTime || new Date();
           const filteredForecast = forecast.filter(item => item.dt >= plotTransitionTime);
@@ -422,11 +412,11 @@
               x: [firstTime, lastTime],
               y: [station.thresholdMLLW, station.thresholdMLLW],
               mode: "lines",
-              name: `Flood criteria (${station.thresholdMLLW.toFixed(2)} ft ${station.datum})`,
+              name: `Flood threshold (${station.thresholdMLLW.toFixed(2)} ft ${station.datum})`,
               line: { width: 3, color: "#ff7f0e", dash: "solid" },
               hovertemplate:
                 `%{x|%a, %b %-d, %-I:%M %p}` +
-                `<br>Flood criteria: %{y:.2f} ft ${station.datum}` +
+                `<br>Flood threshold: %{y:.2f} ft ${station.datum}` +
                 `<extra></extra>`
             },
             {
@@ -438,7 +428,7 @@
               connectgaps: false,
               hovertemplate:
                 `%{x|%a, %b %-d, %-I:%M %p}` +
-                `<br>Observed water level height: %{y:.2f} ft ${station.datum}` +
+                `<br>Observed water level: %{y:.2f} ft ${station.datum}` +
                 `<extra></extra>`
             },
             {
@@ -448,13 +438,12 @@
               mode: "lines",
               name: "Forecast water level",
               line: { width: 4, color: "#1f77b4" },
-              connectgaps: false,  
+              connectgaps: false,
               hovertemplate:
                 `%{x|%a, %b %-d, %-I:%M %p}` +
                 `<br>Expected water level: %{y:.2f} ft ${station.datum}` +
                 `<br>Possible range: %{customdata[0]:.2f} – %{customdata[1]:.2f} ft ${station.datum}` +
                 `<extra></extra>`
-            }
             },
             {
               x: xBand,
@@ -463,7 +452,7 @@
               line: { color: "rgba(0,0,0,0)" },
               hoverinfo: "skip",
               showlegend: false,
-              name: "90th percentile"
+              name: "Range upper bound"
             },
             {
               x: xBand,
@@ -472,14 +461,14 @@
               line: { color: "rgba(0,0,0,0)" },
               fill: "tonexty",
               fillcolor: "rgba(31,119,180,0.18)",
-              name: "10th-90th percentile range",
+              name: "Likely range",
               hoverinfo: "skip"
             },
             {
               x: peaks.map(p => p.dt),
               y: peaks.map(p => p.value),
               mode: "markers",
-              name: "Peak Tides",
+              name: "Peak tides",
               marker: { color: "red", size: 10 },
               showlegend: false,
               hoverinfo: "skip"
@@ -568,6 +557,7 @@
 
           Plotly.newPlot("chart", traces, layout, {
             responsive: true,
+            displayModeBar: false,
             displaylogo: false
           });
 
