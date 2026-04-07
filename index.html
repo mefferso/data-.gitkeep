@@ -358,9 +358,10 @@
           });
           
           // Only show forecast/band from current date-time forward
-          const now = new Date();
-          const filteredForecast = forecast.filter(item => item.dt >= now);
-          const filteredBand = band.filter(item => item.dt >= now);
+          // Start forecast/band at latest observed time so there is no gap
+          const plotTransitionTime = latestObservedTime || new Date();
+          const filteredForecast = forecast.filter(item => item.dt >= plotTransitionTime);
+          const filteredBand = band.filter(item => item.dt >= plotTransitionTime);
           
           const xObserved = filteredObserved.map(d => d.dt);
           const yObserved = filteredObserved.map(d => d.value);
