@@ -92,6 +92,24 @@
       box-shadow: 0 0 0 3px rgba(31, 119, 180, 0.12);
     }
 
+    /* New Button Styles */
+    .btn {
+      padding: 12px 18px;
+      font-size: 14px;
+      font-weight: bold;
+      color: #ffffff;
+      background-color: var(--accent);
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+      height: 45px;
+    }
+
+    .btn:hover {
+      background-color: #155a8a;
+    }
+
     .meta {
       display: flex;
       flex-wrap: wrap;
@@ -153,6 +171,10 @@
           <div class="control-group">
             <label for="stationSelect">Select station</label>
             <select id="stationSelect"></select>
+          </div>
+          
+          <div class="control-group" style="min-width: auto;">
+            <button id="downloadBtn" class="btn">Download PNG</button>
           </div>
         </div>
 
@@ -216,12 +238,14 @@
         file: "data/8761927.csv"
       }
     };
+
     const DEFAULT_STATION_ID = "8761927";
 
     const stationSelect = document.getElementById("stationSelect");
     const chartEl = document.getElementById("chart");
     const statusEl = document.getElementById("status");
     const thresholdPill = document.getElementById("thresholdPill");
+
     function populateStationDropdown() {
       const stationList = Object.values(STATIONS).sort((a, b) => a.name.localeCompare(b.name));
       for (const station of stationList) {
@@ -556,6 +580,21 @@
     });
 
     loadStation(DEFAULT_STATION_ID);
+
+    // Download Button Logic
+    const downloadBtn = document.getElementById("downloadBtn");
+
+    downloadBtn.addEventListener("click", function() {
+      const currentStationId = stationSelect.value;
+      const stationName = STATIONS[currentStationId].name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+      
+      Plotly.downloadImage("chart", {
+        format: "png",
+        width: 1200, 
+        height: 900,
+        filename: `petss_water_level_${stationName}`
+      });
+    });
   </script>
 </body>
 </html>
