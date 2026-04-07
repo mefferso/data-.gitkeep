@@ -216,17 +216,14 @@
         file: "data/8761927.csv"
       }
     };
-
     const DEFAULT_STATION_ID = "8761927";
 
     const stationSelect = document.getElementById("stationSelect");
     const chartEl = document.getElementById("chart");
     const statusEl = document.getElementById("status");
     const thresholdPill = document.getElementById("thresholdPill");
-
     function populateStationDropdown() {
       const stationList = Object.values(STATIONS).sort((a, b) => a.name.localeCompare(b.name));
-
       for (const station of stationList) {
         const opt = document.createElement("option");
         opt.value = station.id;
@@ -251,7 +248,6 @@
       const day = Number(s.slice(6, 8));
       const hour = Number(s.slice(8, 10));
       const minute = Number(s.slice(10, 12));
-
       const dt = new Date(Date.UTC(year, month, day, hour, minute));
       return Number.isNaN(dt.getTime()) ? null : dt;
     }
@@ -283,7 +279,6 @@
 
       thresholdPill.innerHTML = `<strong>Flood threshold:</strong> ${station.thresholdMLLW.toFixed(2)} ft ${station.datum}`;
       chartEl.innerHTML = "";
-      
       Papa.parse(`${station.file}?v=${Date.now()}`, {
         download: true,
         dynamicTyping: false,
@@ -319,7 +314,6 @@
             const twl = toNumber(row[COL_TWL]);
             const twl90 = toNumber(row[COL_TWL90P]);
             const twl10 = toNumber(row[COL_TWL10P]);
-
             if (ob !== null) observed.push({ dt, value: ob });
             if (twl !== null) forecast.push({ dt, value: twl });
             if (twl10 !== null && twl90 !== null) band.push({ dt, low: twl10, high: twl90 });
@@ -337,13 +331,11 @@
           const observedCutoffTime = latestObservedTime
             ? new Date(latestObservedTime.getTime() - observedHoursBack * 60 * 60 * 1000)
             : null;
-
           const filteredObserved = observed.filter(item => !observedCutoffTime || item.dt >= observedCutoffTime);
 
           const plotTransitionTime = latestObservedTime || new Date();
           const filteredForecast = forecast.filter(item => item.dt >= plotTransitionTime);
           const filteredBand = band.filter(item => item.dt >= plotTransitionTime);
-
           const xObserved = filteredObserved.map(d => d.dt);
           const yObserved = filteredObserved.map(d => d.value);
 
@@ -357,12 +349,10 @@
           const bandLookup = new Map(
             filteredBand.map(d => [d.dt.getTime(), { low: d.low, high: d.high }])
           );
-
           const customdataForecast = filteredForecast.map(d => {
             const match = bandLookup.get(d.dt.getTime());
             return match ? [match.low, match.high] : [null, null];
           });
-
           if (xObserved.length === 0 && xForecast.length === 0) {
             chartEl.innerHTML = "<p style='padding:20px;color:#b42318;font-weight:bold;'>CSV loaded, but no observed or future forecast water level values were found.</p>";
             setStatus(`No plotted data found for ${station.name}.`, true);
@@ -372,7 +362,6 @@
           const peaks = [];
           for (let i = 3; i < filteredForecast.length - 3; i++) {
             let isLocalMax = true;
-
             for (let j = 1; j <= 3; j++) {
               if (
                 filteredForecast[i].value <= filteredForecast[i - j].value ||
@@ -401,11 +390,9 @@
           };
 
           const daysArr = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
           const allTimes = [...xObserved, ...xForecast].sort((a, b) => a - b);
           const firstTime = allTimes[0];
           const lastTime = allTimes[allTimes.length - 1];
-
           const traces = [
             {
               x: [firstTime, lastTime],
@@ -473,7 +460,6 @@
               hoverinfo: "skip"
             }
           ];
-
           const subtitlePieces = [];
           if (latestObservedTime) {
             subtitlePieces.push(`Latest observed: ${fmtLocal(latestObservedTime)}`);
@@ -528,7 +514,6 @@
               }
             ]
           };
-
           peaks.forEach(p => {
             const tPeak = p.dt;
             const tStart = new Date(tPeak.getTime() - 2 * 3600 * 1000);
@@ -545,14 +530,13 @@
               showarrow: true,
               arrowhead: 0,
               ax: 0,
-              ay: -55,
+              ay: -90, 
               bgcolor: "#6baed6",
               bordercolor: "#3182bd",
               font: { color: "#000", size: 12 },
               borderpad: 4
             });
           });
-
           Plotly.newPlot("chart", traces, layout, {
             responsive: true,
             displayModeBar: false,
@@ -567,7 +551,6 @@
     }
 
     populateStationDropdown();
-
     stationSelect.addEventListener("change", function() {
       loadStation(this.value);
     });
