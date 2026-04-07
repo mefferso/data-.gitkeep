@@ -560,8 +560,6 @@
             displayModeBar: false,
             displaylogo: false
           });
-
-          setStatus(`Loaded ${station.name}.`);
         },
         error: function(err) {
           chartEl.innerHTML = `<p style="padding:20px;color:#b42318;font-weight:bold;">Failed to load CSV: ${err.message}</p>`;
