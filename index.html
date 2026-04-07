@@ -467,10 +467,7 @@
           ];
 
           const subtitlePieces = [];
-          subtitlePieces.push(`Station ID: ${station.id}`);
-          subtitlePieces.push(`Flood threshold: ${station.thresholdMLLW.toFixed(2)} ft ${station.datum}`);
-          if (latestObservedTime) {
-            subtitlePieces.push(`Latest observed: ${fmtLocal(latestObservedTime)}`);
+              subtitlePieces.push(`Latest observed: ${fmtLocal(latestObservedTime)}`);
           }
 
           const layout = {
