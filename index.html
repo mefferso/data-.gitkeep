@@ -128,12 +128,6 @@
       padding: 0 8px 8px 8px;
     }
 
-    .footer-note {
-      padding: 0 22px 20px 22px;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
     @media (max-width: 768px) {
       body {
         padding: 12px;
@@ -163,7 +157,7 @@
         </div>
 
         <div class="meta">
-          <div class="pill"><strong>Observed window:</strong> last 72 hours only</div>
+          <div class="pill"><strong>Observed window:</strong> last 72 hours</div>
           <div class="pill"><strong>Forecast band:</strong> 10th–90th percentile</div>
           <div class="pill"><strong>Datum:</strong> MLLW</div>
           <div class="pill" id="thresholdPill"><strong>Flood threshold:</strong> --</div>
@@ -172,11 +166,12 @@
 
       <div id="status"></div>
       <div id="chart"></div>
-     </div>
+    </div>
   </div>
 
   <script>
     const observedHoursBack = 72;
+
     const STATIONS = {
       "8747437": {
         id: "8747437",
@@ -221,6 +216,7 @@
         file: "data/8761927.csv"
       }
     };
+
     const DEFAULT_STATION_ID = "8761927";
 
     const stationSelect = document.getElementById("stationSelect");
@@ -230,6 +226,7 @@
 
     function populateStationDropdown() {
       const stationList = Object.values(STATIONS).sort((a, b) => a.name.localeCompare(b.name));
+
       for (const station of stationList) {
         const opt = document.createElement("option");
         opt.value = station.id;
@@ -254,6 +251,7 @@
       const day = Number(s.slice(6, 8));
       const hour = Number(s.slice(8, 10));
       const minute = Number(s.slice(10, 12));
+
       const dt = new Date(Date.UTC(year, month, day, hour, minute));
       return Number.isNaN(dt.getTime()) ? null : dt;
     }
@@ -284,8 +282,9 @@
       }
 
       thresholdPill.innerHTML = `<strong>Flood threshold:</strong> ${station.thresholdMLLW.toFixed(2)} ft ${station.datum}`;
-      
       chartEl.innerHTML = "";
+      setStatus(`Loading ${station.name}...`);
+
       Papa.parse(`${station.file}?v=${Date.now()}`, {
         download: true,
         dynamicTyping: false,
@@ -347,17 +346,15 @@
           const observedCutoffTime = latestObservedTime
             ? new Date(latestObservedTime.getTime() - observedHoursBack * 60 * 60 * 1000)
             : null;
-            
+
           const filteredObserved = observed.filter(item => {
             return !observedCutoffTime || item.dt >= observedCutoffTime;
           });
-          
-          // Only show forecast/band from current date-time forward
-          // Start forecast/band at latest observed time so there is no gap
+
           const plotTransitionTime = latestObservedTime || new Date();
           const filteredForecast = forecast.filter(item => item.dt >= plotTransitionTime);
           const filteredBand = band.filter(item => item.dt >= plotTransitionTime);
-          
+
           const xObserved = filteredObserved.map(d => d.dt);
           const yObserved = filteredObserved.map(d => d.value);
 
@@ -368,47 +365,58 @@
           const yBandTop = filteredBand.map(d => d.high);
           const yBandBottom = filteredBand.map(d => d.low);
 
+          const bandLookup = new Map(
+            filteredBand.map(d => [d.dt.getTime(), { low: d.low, high: d.high }])
+          );
+
+          const customdataForecast = filteredForecast.map(d => {
+            const match = bandLookup.get(d.dt.getTime());
+            return match ? [match.low, match.high] : [null, null];
+          });
+
           if (xObserved.length === 0 && xForecast.length === 0) {
             chartEl.innerHTML = "<p style='padding:20px;color:#b42318;font-weight:bold;'>CSV loaded, but no observed or future forecast water level values were found.</p>";
             setStatus(`No plotted data found for ${station.name}.`, true);
             return;
           }
 
-          // --- PEAK DETECTION LOGIC ---
           const peaks = [];
-          // Find local maxima in the future forecast
           for (let i = 3; i < filteredForecast.length - 3; i++) {
             let isLocalMax = true;
+
             for (let j = 1; j <= 3; j++) {
-              if (filteredForecast[i].value <= filteredForecast[i-j].value || filteredForecast[i].value <= filteredForecast[i+j].value) {
+              if (
+                filteredForecast[i].value <= filteredForecast[i - j].value ||
+                filteredForecast[i].value <= filteredForecast[i + j].value
+              ) {
                 isLocalMax = false;
                 break;
               }
             }
 
-            // If it's a peak AND within 0.5 ft of the flood threshold
             if (isLocalMax && filteredForecast[i].value >= (station.thresholdMLLW - 0.5)) {
-              // Ensure peaks are separated by at least 8 hours to avoid double-counting
-              if (peaks.length === 0 || (filteredForecast[i].dt - peaks[peaks.length-1].dt) > 8 * 3600 * 1000) {
+              if (
+                peaks.length === 0 ||
+                (filteredForecast[i].dt - peaks[peaks.length - 1].dt) > 8 * 3600 * 1000
+              ) {
                 peaks.push(filteredForecast[i]);
               }
             }
           }
 
-          // Helper to format hours like "4PM"
           const getHrStr = (dt) => {
             let h = dt.getHours();
-            const ampm = h >= 12 ? 'PM' : 'AM';
+            const ampm = h >= 12 ? "PM" : "AM";
             h = h % 12;
             return `${h === 0 ? 12 : h}${ampm}`;
           };
-          const daysArr = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-          // ----------------------------
+
+          const daysArr = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
           const allTimes = [...xObserved, ...xForecast].sort((a, b) => a - b);
           const firstTime = allTimes[0];
           const lastTime = allTimes[allTimes.length - 1];
-          
+
           const traces = [
             {
               x: [firstTime, lastTime],
@@ -416,7 +424,10 @@
               mode: "lines",
               name: `Flood criteria (${station.thresholdMLLW.toFixed(2)} ft ${station.datum})`,
               line: { width: 3, color: "#ff7f0e", dash: "solid" },
-              hovertemplate: `Flood criteria: %{y:.2f} ft ${station.datum}<extra></extra>`
+              hovertemplate:
+                `%{x|%a, %b %-d, %-I:%M %p} LST` +
+                `<br>Flood criteria: %{y:.2f} ft ${station.datum}` +
+                `<extra></extra>`
             },
             {
               x: xObserved,
@@ -425,16 +436,25 @@
               name: "Observed water level",
               line: { width: 4, color: "#2ca02c" },
               connectgaps: false,
-              hovertemplate: `Observed<br>%{x}<br>%{y:.2f} ft ${station.datum}<extra></extra>`
+              hovertemplate:
+                `%{x|%a, %b %-d, %-I:%M %p} LST` +
+                `<br>Observed water level height: %{y:.2f} ft ${station.datum}` +
+                `<extra></extra>`
             },
             {
               x: xForecast,
               y: yForecast,
+              customdata: customdataForecast,
               mode: "lines",
               name: "Forecast water level",
               line: { width: 4, color: "#1f77b4" },
               connectgaps: false,
-              hovertemplate: `Forecast<br>%{x}<br>%{y:.2f} ft ${station.datum}<extra></extra>`
+              hovertemplate:
+                `%{x|%a, %b %-d, %-I:%M %p} LST` +
+                `<br>Potential water level height: %{y:.2f} ft ${station.datum}` +
+                `<br>10th percentile: %{customdata[0]:.2f} ft ${station.datum}` +
+                `<br>90th percentile: %{customdata[1]:.2f} ft ${station.datum}` +
+                `<extra></extra>`
             },
             {
               x: xBand,
@@ -453,7 +473,7 @@
               fill: "tonexty",
               fillcolor: "rgba(31,119,180,0.18)",
               name: "10th-90th percentile range",
-              hovertemplate: `10th percentile<br>%{x}<br>%{y:.2f} ft ${station.datum}<extra></extra>`
+              hoverinfo: "skip"
             },
             {
               x: peaks.map(p => p.dt),
@@ -467,8 +487,6 @@
           ];
 
           const subtitlePieces = [];
-          subtitlePieces.push(`Station ID: ${station.id}`);
-          subtitlePieces.push(`Flood threshold: ${station.thresholdMLLW.toFixed(2)} ft ${station.datum}`);
           if (latestObservedTime) {
             subtitlePieces.push(`Latest observed: ${fmtLocal(latestObservedTime)}`);
           }
@@ -482,7 +500,7 @@
             },
             paper_bgcolor: "#ffffff",
             plot_bgcolor: "#ffffff",
-            hovermode: "x unified",
+            hovermode: "closest",
             margin: { l: 80, r: 36, t: 95, b: 170 },
             xaxis: {
               title: { text: "Time (browser local time)", font: { size: 18 } },
@@ -512,7 +530,7 @@
               {
                 xref: "paper",
                 yref: "y",
-                x: 0.01, 
+                x: 0.01,
                 y: station.thresholdMLLW,
                 xanchor: "left",
                 yanchor: "bottom",
@@ -524,18 +542,19 @@
             ]
           };
 
-          // Dynamically add peak callouts to the layout
           peaks.forEach(p => {
             const tPeak = p.dt;
-            const tStart = new Date(tPeak.getTime() - 2 * 3600 * 1000); // 2 hours prior
-            const tEnd = new Date(tPeak.getTime() + 2 * 3600 * 1000);   // 2 hours after
+            const tStart = new Date(tPeak.getTime() - 2 * 3600 * 1000);
+            const tEnd = new Date(tPeak.getTime() + 2 * 3600 * 1000);
             const dayStr = daysArr[tPeak.getDay()];
 
-            // Combined point label 
             layout.annotations.push({
               x: p.dt,
               y: p.value,
-              text: `<b>Peak: ${p.value.toFixed(2)} ft ${station.datum}</b><br>${getHrStr(tPeak)} ${dayStr}<br><b>Window:</b> ${getHrStr(tStart)} - ${getHrStr(tEnd)}`,
+              text:
+                `<b>Peak: ${p.value.toFixed(2)} ft ${station.datum}</b><br>` +
+                `${getHrStr(tPeak)} ${dayStr}<br>` +
+                `<b>Window:</b> ${getHrStr(tStart)} - ${getHrStr(tEnd)}`,
               showarrow: true,
               arrowhead: 0,
               ax: 0,
@@ -552,6 +571,7 @@
             displaylogo: false
           });
 
+          setStatus(`Loaded ${station.name}.`);
         },
         error: function(err) {
           chartEl.innerHTML = `<p style="padding:20px;color:#b42318;font-weight:bold;">Failed to load CSV: ${err.message}</p>`;
