@@ -26,24 +26,27 @@ jobs:
           rm -rf extracted/*
           rm -f data/*.csv
 
-          DATE=$(date -u +%Y%m%d)
+          TODAY=$(date -u +%Y%m%d)
+          YESTERDAY=$(date -u -d "yesterday" +%Y%m%d)
           FOUND=""
 
-          for HH in 18 12 06 00; do
-            FILE="petss.t${HH}z.gefs_csv.tar.gz"
-            URL="https://nomads.ncep.noaa.gov/pub/data/nccf/com/petss/prod/petss.${DATE}/${FILE}"
+          for DATE in "$TODAY" "$YESTERDAY"; do
+            for HH in 18 12 06 00; do
+              FILE="petss.t${HH}z.gefs_csv.tar.gz"
+              URL="https://nomads.ncep.noaa.gov/pub/data/nccf/com/petss/prod/petss.${DATE}/${FILE}"
 
-            echo "Trying $URL"
+              echo "Trying $URL"
 
-            if curl -f -L --retry 3 --retry-delay 5 --connect-timeout 30 "$URL" -o "downloads/$FILE"; then
-              echo "Downloaded $FILE"
-              FOUND="downloads/$FILE"
-              break
-            fi
+              if curl -f -L --retry 3 --retry-delay 5 --connect-timeout 30 "$URL" -o "downloads/$FILE"; then
+                echo "Downloaded $FILE from date $DATE"
+                FOUND="downloads/$FILE"
+                break 2
+              fi
+            done
           done
 
           if [ -z "$FOUND" ]; then
-            echo "No PETSS archive found for today's 00/06/12/18Z cycles."
+            echo "No PETSS archive found for today or yesterday (00/06/12/18Z cycles)."
             exit 1
           fi
 
@@ -110,7 +113,6 @@ jobs:
           data_dir.mkdir(exist_ok=True)
 
           def find_station_file(station_id: str):
-              # First try content match
               try:
                   result = subprocess.run(
                       ["grep", "-Ril", station_id, str(extracted)],
@@ -124,7 +126,6 @@ jobs:
               except Exception:
                   pass
 
-              # Fallback: filename match
               for p in extracted.rglob("*"):
                   if p.is_file() and station_id in p.name:
                       return p
