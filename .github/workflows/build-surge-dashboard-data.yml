@@ -63,7 +63,6 @@ jobs:
           FAVORABLE_MAX_1 = 360
           FAVORABLE_MIN_2 = 0
           FAVORABLE_MAX_2 = 45
-
           FAVORABLE_DIR_NOTE = "Northeast through north to northwest"
 
           def fmt_utc(dt):
@@ -124,6 +123,64 @@ jobs:
                   return False
               return (FAVORABLE_MIN_1 <= deg <= FAVORABLE_MAX_1) or (FAVORABLE_MIN_2 <= deg <= FAVORABLE_MAX_2)
 
+          def floor_hour(dt):
+              return dt.replace(minute=0, second=0, microsecond=0)
+
+          def nearest_row(rows, target_dt, time_key, max_diff_minutes=90):
+              best = None
+              best_diff = None
+
+              for row in rows:
+                  dt = row.get(time_key)
+                  if dt is None:
+                      continue
+
+                  diff = abs((dt - target_dt).total_seconds())
+                  if best is None or diff < best_diff:
+                      best = row
+                      best_diff = diff
+
+              if best is None:
+                  return None
+
+              if best_diff > max_diff_minutes * 60:
+                  return None
+
+              return best
+
+          def interp_field(rows, target_dt, field):
+              pts = []
+              for row in rows:
+                  val = row.get(field)
+                  dt = row.get("time_utc")
+                  if dt is not None and val is not None:
+                      pts.append((dt, val))
+
+              if not pts:
+                  return None
+
+              pts.sort(key=lambda x: x[0])
+
+              if target_dt < pts[0][0] or target_dt > pts[-1][0]:
+                  return None
+
+              for i in range(len(pts)):
+                  if pts[i][0] == target_dt:
+                      return pts[i][1]
+
+              for i in range(len(pts) - 1):
+                  t0, v0 = pts[i]
+                  t1, v1 = pts[i + 1]
+
+                  if t0 <= target_dt <= t1:
+                      total = (t1 - t0).total_seconds()
+                      if total == 0:
+                          return v0
+                      frac = (target_dt - t0).total_seconds() / total
+                      return v0 + frac * (v1 - v0)
+
+              return None
+
           # -----------------------------
           # Read NBM hourly
           # -----------------------------
@@ -147,8 +204,6 @@ jobs:
                   })
 
           nbm_rows.sort(key=lambda r: r["valid_time_utc"])
-
-          nbm_by_time = {r["valid_time_utc"]: r for r in nbm_rows}
 
           # -----------------------------
           # Read PETSS cleaned CSV
@@ -209,44 +264,59 @@ jobs:
           hilo_rows.sort(key=lambda r: r["time_utc"])
 
           # -----------------------------
-          # Build merged series
+          # Build merged series on a true hourly timeline
           # -----------------------------
-          start_utc = NOW_UTC - timedelta(hours=6)
-          end_utc = NOW_UTC + timedelta(hours=84)
+          start_utc = floor_hour(NOW_UTC - timedelta(hours=6))
+          end_utc = floor_hour(NOW_UTC + timedelta(hours=84))
 
           series = []
           favorable_periods = []
           in_fav = False
           fav_start = None
 
-          display_petss = [r for r in petss_rows if start_utc <= r["time_utc"] <= end_utc]
+          timeline = []
+          t = start_utc
+          while t <= end_utc:
+              timeline.append(t)
+              t += timedelta(hours=1)
 
-          for p in display_petss:
-              t = p["time_utc"]
-              nbm = nbm_by_time.get(t)
+          for t in timeline:
+              nbm_match = nearest_row(nbm_rows, t, "valid_time_utc", max_diff_minutes=90)
 
-              wind_dir = nbm.get("wind_dir_deg") if nbm else None
-              gust = nbm.get("gst_kt") if nbm else None
-              wsp = nbm.get("wsp_kt") if nbm else None
+              surge_ft = interp_field(petss_rows, t, "SURGE")
+              surge10_ft = interp_field(petss_rows, t, "SURGE10p")
+              surge90_ft = interp_field(petss_rows, t, "SURGE90p")
+              tide_ft = interp_field(petss_rows, t, "TIDE")
+              twl_ft = interp_field(petss_rows, t, "TWL")
+              twl10_ft = interp_field(petss_rows, t, "TWL10p")
+              twl90_ft = interp_field(petss_rows, t, "TWL90p")
+              obs_ft = interp_field(petss_rows, t, "OB")
+              bias_ft = interp_field(petss_rows, t, "BIAS")
+
+              wind_dir = nbm_match.get("wind_dir_deg") if nbm_match else None
+              gust = nbm_match.get("gst_kt") if nbm_match else None
+              wsp = nbm_match.get("wsp_kt") if nbm_match else None
               is_fav = is_favorable_dir(wind_dir)
 
-              series.append({
+              row = {
                   "time_utc": fmt_utc(t),
                   "time_local": fmt_local(t),
-                  "surge_ft": round_or_none(p.get("SURGE"), 3),
-                  "surge10_ft": round_or_none(p.get("SURGE10p"), 3),
-                  "surge90_ft": round_or_none(p.get("SURGE90p"), 3),
-                  "tide_ft": round_or_none(p.get("TIDE"), 3),
-                  "twl_ft": round_or_none(p.get("TWL"), 3),
-                  "twl10_ft": round_or_none(p.get("TWL10p"), 3),
-                  "twl90_ft": round_or_none(p.get("TWL90p"), 3),
-                  "obs_ft": round_or_none(p.get("OB"), 3),
-                  "bias_ft": round_or_none(p.get("BIAS"), 3),
+                  "surge_ft": round_or_none(surge_ft, 3),
+                  "surge10_ft": round_or_none(surge10_ft, 3),
+                  "surge90_ft": round_or_none(surge90_ft, 3),
+                  "tide_ft": round_or_none(tide_ft, 3),
+                  "twl_ft": round_or_none(twl_ft, 3),
+                  "twl10_ft": round_or_none(twl10_ft, 3),
+                  "twl90_ft": round_or_none(twl90_ft, 3),
+                  "obs_ft": round_or_none(obs_ft, 3),
+                  "bias_ft": round_or_none(bias_ft, 3),
                   "wind_dir_deg": wind_dir,
                   "wind_speed_kt": round_or_none(wsp, 1),
                   "wind_gust_kt": round_or_none(gust, 1),
                   "is_favorable_wind": is_fav,
-              })
+              }
+
+              series.append(row)
 
               if is_fav and not in_fav:
                   in_fav = True
@@ -265,7 +335,7 @@ jobs:
               last_dt = parse_iso_utc(series[-1]["time_utc"])
               favorable_periods.append({
                   "start_utc": fmt_utc(fav_start),
-                  "end_utc": series[-1]["time_utc"],
+                  "end_utc": fmt_utc(last_dt),
                   "start_local": fmt_local(fav_start),
                   "end_local": fmt_local(last_dt),
               })
@@ -299,8 +369,14 @@ jobs:
               if start_utc <= r["time_utc"] <= end_utc
           ]
 
-          next_high = next((r for r in upcoming_hilo if r["type"] == "H" and parse_iso_utc(r["time_utc"]) >= NOW_UTC), None)
-          next_low = next((r for r in upcoming_hilo if r["type"] == "L" and parse_iso_utc(r["time_utc"]) >= NOW_UTC), None)
+          next_high = next(
+              (r for r in upcoming_hilo if r["type"] == "H" and parse_iso_utc(r["time_utc"]) >= NOW_UTC),
+              None
+          )
+          next_low = next(
+              (r for r in upcoming_hilo if r["type"] == "L" and parse_iso_utc(r["time_utc"]) >= NOW_UTC),
+              None
+          )
 
           if max_surge is not None and max_surge >= 0.8:
               headline = f"Strong surge signal: forecast surge peaks near {max_surge:.2f} ft."
