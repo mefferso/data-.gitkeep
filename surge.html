@@ -3,33 +3,41 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Night Surge Index</title>
+  <title>New Canal Surge Timeline</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
   <style>
     :root{
       --bg:#0b1220;
-      --bg2:#111a2b;
+      --bg2:#10192b;
       --panel:#162235;
-      --panel2:#1b2a40;
+      --panel2:#1c2b43;
+      --line:#2b3d59;
       --text:#eaf1ff;
       --muted:#9fb0cb;
-      --line:#2b3d59;
-      --accent:#56b4ff;
-      --good:#38d39f;
-      --low:#7bc4ff;
-      --mod:#ffc857;
-      --high:#ff8a5b;
-      --vhigh:#ff4d6d;
-      --minimal:#7f8da6;
+      --accent:#5cc8ff;
+      --red:#ff4d5a;
+      --orange:#ffb454;
+      --green:#4fd18b;
+      --purple:#b78cff;
       --shadow:0 10px 30px rgba(0,0,0,.28);
       --radius:18px;
     }
 
     *{box-sizing:border-box}
-    html,body{margin:0;padding:0;background:linear-gradient(180deg,var(--bg),#0f1727 35%, #0a101b 100%);color:var(--text);font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    html,body{
+      margin:0;
+      padding:0;
+      background:linear-gradient(180deg,var(--bg),#0f1727 40%, #09111c 100%);
+      color:var(--text);
+      font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+    }
+
     body{min-height:100vh}
 
     .wrap{
-      width:min(1400px, calc(100% - 24px));
+      width:min(1450px, calc(100% - 24px));
       margin:18px auto 40px;
     }
 
@@ -37,9 +45,9 @@
       display:flex;
       justify-content:space-between;
       align-items:flex-start;
-      gap:12px;
-      margin-bottom:18px;
+      gap:14px;
       flex-wrap:wrap;
+      margin-bottom:18px;
     }
 
     .titlebox{
@@ -50,14 +58,14 @@
 
     h1{
       margin:0;
-      font-size:clamp(1.8rem, 2.5vw, 2.8rem);
+      font-size:clamp(1.8rem, 2.8vw, 2.9rem);
       line-height:1.05;
       letter-spacing:.3px;
     }
 
     .subtitle{
       color:var(--muted);
-      font-size:.98rem;
+      font-size:1rem;
     }
 
     .controls{
@@ -67,8 +75,7 @@
       align-items:center;
     }
 
-    .pill,
-    button{
+    .pill, button{
       border:1px solid var(--line);
       background:rgba(255,255,255,.04);
       color:var(--text);
@@ -87,13 +94,19 @@
       background:rgba(255,255,255,.08);
     }
 
-    .headline{
-      background:linear-gradient(180deg, rgba(86,180,255,.12), rgba(86,180,255,.04));
-      border:1px solid #28496e;
+    .panel{
+      background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015));
+      border:1px solid var(--line);
       border-radius:var(--radius);
-      padding:16px 18px;
+      padding:16px;
       box-shadow:var(--shadow);
-      margin-bottom:18px;
+      min-width:0;
+    }
+
+    .headline{
+      margin-bottom:16px;
+      background:linear-gradient(180deg, rgba(92,200,255,.10), rgba(92,200,255,.03));
+      border:1px solid #2c4e72;
     }
 
     .headline-top{
@@ -105,14 +118,14 @@
     }
 
     .headline-title{
-      font-size:1.2rem;
+      font-size:1.18rem;
       font-weight:800;
-      letter-spacing:.2px;
     }
 
     .headline-meta{
       color:var(--muted);
       font-size:.92rem;
+      margin-top:4px;
     }
 
     .grid{
@@ -120,47 +133,17 @@
       gap:16px;
     }
 
-    .grid-3{
-      grid-template-columns:repeat(3, minmax(0,1fr));
+    .grid-4{
+      grid-template-columns:repeat(4, minmax(0,1fr));
     }
 
     .grid-2{
       grid-template-columns:repeat(2, minmax(0,1fr));
     }
 
-    .panel{
-      background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015));
-      border:1px solid var(--line);
-      border-radius:var(--radius);
-      padding:16px;
-      box-shadow:var(--shadow);
-      min-width:0;
-    }
-
-    .panel h2,
-    .panel h3{
-      margin:0 0 10px;
-      line-height:1.1;
-    }
-
-    .panel h2{font-size:1.1rem}
-    .panel h3{font-size:1rem}
-
-    .muted{color:var(--muted)}
-    .small{font-size:.88rem}
-    .tiny{font-size:.8rem}
-    .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
-
-    .metrics{
-      display:grid;
-      grid-template-columns:repeat(4, minmax(0,1fr));
-      gap:12px;
-      margin-top:12px;
-    }
-
     .metric{
       background:rgba(255,255,255,.035);
-      border:1px solid rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.06);
       border-radius:16px;
       padding:12px;
       min-width:0;
@@ -173,144 +156,62 @@
     }
 
     .metric-value{
-      font-size:1.45rem;
+      font-size:1.5rem;
       font-weight:800;
+      line-height:1.1;
       letter-spacing:.2px;
       white-space:nowrap;
     }
 
     .metric-sub{
-      margin-top:4px;
+      margin-top:5px;
       color:var(--muted);
-      font-size:.78rem;
-      line-height:1.25;
+      font-size:.8rem;
+      line-height:1.3;
     }
 
-    .signal-badge{
+    .chart-wrap{
+      height:560px;
+      position:relative;
+    }
+
+    .legend-note{
+      margin-top:12px;
+      color:var(--muted);
+      font-size:.88rem;
+      line-height:1.4;
+    }
+
+    .toggle-row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-bottom:14px;
+    }
+
+    .toggle{
       display:inline-flex;
       align-items:center;
       gap:8px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.03);
       border-radius:999px;
       padding:8px 12px;
       font-size:.9rem;
-      font-weight:800;
-      letter-spacing:.2px;
-      border:1px solid transparent;
-      white-space:nowrap;
+      color:var(--text);
+      user-select:none;
     }
 
-    .signal-minimal{background:rgba(127,141,166,.16); color:#c3cede; border-color:rgba(127,141,166,.35)}
-    .signal-low{background:rgba(123,196,255,.15); color:#b7e0ff; border-color:rgba(123,196,255,.34)}
-    .signal-moderate{background:rgba(255,200,87,.16); color:#ffe099; border-color:rgba(255,200,87,.35)}
-    .signal-high{background:rgba(255,138,91,.16); color:#ffc0a6; border-color:rgba(255,138,91,.35)}
-    .signal-very-high{background:rgba(255,77,109,.16); color:#ffb8c4; border-color:rgba(255,77,109,.35)}
-
-    .window-card{
-      position:relative;
-      overflow:hidden;
-    }
-
-    .window-card.active{
-      border-color:#4a7ec4;
-      box-shadow:0 12px 34px rgba(38,95,171,.18);
-    }
-
-    .window-card.active::before{
-      content:"ACTIVE";
-      position:absolute;
-      top:14px;
-      right:-30px;
-      background:#2f6fd1;
-      color:white;
-      font-size:.72rem;
-      font-weight:900;
-      letter-spacing:.8px;
-      padding:6px 34px;
-      transform:rotate(35deg);
-      box-shadow:0 4px 14px rgba(0,0,0,.25);
-    }
-
-    .card-top{
-      display:flex;
-      justify-content:space-between;
-      gap:12px;
-      align-items:flex-start;
-      margin-bottom:12px;
-      flex-wrap:wrap;
-    }
-
-    .window-title{
-      font-size:1.05rem;
-      font-weight:800;
-    }
-
-    .timepair{
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:10px;
-      margin:10px 0 14px;
-    }
-
-    .timebox{
-      background:rgba(255,255,255,.035);
-      border:1px solid rgba(255,255,255,.06);
-      border-radius:16px;
-      padding:12px;
-    }
-
-    .timebox-label{
-      color:var(--muted);
-      font-size:.8rem;
-      text-transform:uppercase;
-      letter-spacing:.6px;
-      margin-bottom:6px;
-    }
-
-    .timebox-main{
-      font-size:1rem;
-      font-weight:700;
-      line-height:1.25;
-    }
-
-    .timebox-sub{
-      margin-top:4px;
-      color:var(--muted);
-      font-size:.8rem;
-    }
-
-    .reason-list{
-      margin:10px 0 0;
-      padding-left:18px;
-      color:var(--muted);
-    }
-
-    .reason-list li{
-      margin:4px 0;
-    }
-
-    .samples{
-      margin-top:12px;
-      border-top:1px solid rgba(255,255,255,.07);
-      padding-top:12px;
-    }
-
-    details{
-      background:rgba(255,255,255,.028);
-      border:1px solid rgba(255,255,255,.055);
-      border-radius:14px;
-      padding:10px 12px;
-    }
-
-    summary{
+    .toggle input{
+      accent-color:#5cc8ff;
       cursor:pointer;
-      font-weight:700;
     }
 
     table{
       width:100%;
       border-collapse:collapse;
-      margin-top:12px;
-      font-size:.9rem;
+      margin-top:8px;
+      font-size:.92rem;
     }
 
     th,td{
@@ -329,22 +230,14 @@
 
     tr:last-child td{border-bottom:none}
 
-    .yes{
-      color:var(--good);
-      font-weight:800;
-    }
+    .muted{color:var(--muted)}
 
-    .no{
-      color:var(--muted);
-      font-weight:700;
-    }
-
-    .empty{
-      border:1px dashed rgba(255,255,255,.15);
-      background:rgba(255,255,255,.02);
-      border-radius:var(--radius);
-      padding:20px;
-      color:var(--muted);
+    .error{
+      background:rgba(255,77,90,.12);
+      border:1px solid rgba(255,77,90,.35);
+      color:#ffd5d9;
+      border-radius:16px;
+      padding:14px 16px;
     }
 
     .footer{
@@ -354,34 +247,16 @@
       line-height:1.45;
     }
 
-    .error{
-      background:rgba(255,77,109,.12);
-      border:1px solid rgba(255,77,109,.35);
-      color:#ffd2dc;
-      border-radius:16px;
-      padding:14px 16px;
-      margin-top:14px;
-    }
-
-    .loading{
-      opacity:.72;
-    }
-
-    @media (max-width: 1100px){
-      .grid-3{grid-template-columns:1fr}
+    @media (max-width: 1150px){
+      .grid-4{grid-template-columns:repeat(2, minmax(0,1fr))}
       .grid-2{grid-template-columns:1fr}
-      .metrics{grid-template-columns:repeat(2, minmax(0,1fr))}
+      .chart-wrap{height:500px}
     }
 
-    @media (max-width: 720px){
-      .timepair{grid-template-columns:1fr}
-      .metrics{grid-template-columns:1fr 1fr}
-      .metric-value{font-size:1.25rem}
-      .wrap{width:min(100% - 14px, 1400px)}
-    }
-
-    @media (max-width: 520px){
-      .metrics{grid-template-columns:1fr}
+    @media (max-width: 700px){
+      .grid-4{grid-template-columns:1fr}
+      .chart-wrap{height:420px}
+      .wrap{width:min(100% - 14px, 1450px)}
     }
   </style>
 </head>
@@ -389,8 +264,8 @@
   <div class="wrap">
     <div class="topbar">
       <div class="titlebox">
-        <h1>Night Surge Index</h1>
-        <div class="subtitle">Post-frontal surge decision support for New Canal Station using KNEW NBM gusts, hi/low tide windows, and PETSS context.</div>
+        <h1>New Canal Surge Timeline</h1>
+        <div class="subtitle">Forecast tide, surge, total water level, and KNEW gusts — with the surge ramp-up shown in red where it actually matters.</div>
       </div>
 
       <div class="controls">
@@ -400,30 +275,32 @@
       </div>
     </div>
 
-    <div id="app" class="loading">
-      <div class="headline">
+    <div id="app">
+      <div class="panel headline">
         <div class="headline-top">
           <div>
-            <div class="headline-title">Loading surge guidance...</div>
-            <div class="headline-meta">Hang on while the page reads the latest JSON.</div>
+            <div class="headline-title">Loading latest surge timeline...</div>
+            <div class="headline-meta">Pulling the latest chart JSON from GitHub Pages.</div>
           </div>
         </div>
       </div>
     </div>
 
     <div class="footer">
-      <div><strong>Direction rule:</strong> favorable winds are treated as 315–360° and 0–45°.</div>
-      <div><strong>Ga</strong> = average favorable gust during the low-to-high tide window. <strong>Gf</strong> = “effective” peak gust using anti-bullshit stray-spike logic.</div>
-      <div>If you open this HTML directly from your hard drive and it looks broken, that’s probably browser fetch security being a pain in the ass. It’s meant to be served from GitHub Pages or another web server.</div>
+      <div><strong>Wind rule used for “favorable” periods:</strong> 315–360° and 0–45°.</div>
+      <div><strong>Red line:</strong> forecast surge. <strong>Cyan:</strong> total water level. <strong>Gray:</strong> astronomical tide. <strong>Orange:</strong> KNEW gusts on the right axis.</div>
+      <div>Yeah, this is way more useful than a pile of cute little scorecards.</div>
     </div>
   </div>
 
   <script>
+    const DATA_URL = "data/surge_dashboard/chart_data.json";
     const STATUS_URL = "data/surge_dashboard/dashboard_status.json";
-    const DATA_URL = "data/surge_dashboard/dashboard_data.json";
     const REFRESH_SECONDS = 300;
+
     let countdown = REFRESH_SECONDS;
     let countdownTimer = null;
+    let chart = null;
 
     const app = document.getElementById("app");
     const lastUpdatedEl = document.getElementById("lastUpdated");
@@ -450,19 +327,6 @@
       return `${n.toFixed(digits)}${suffix}`;
     }
 
-    function sigClass(signal){
-      const s = String(signal || "").toLowerCase();
-      if (s === "very high") return "signal-very-high";
-      if (s === "high") return "signal-high";
-      if (s === "moderate") return "signal-moderate";
-      if (s === "low") return "signal-low";
-      return "signal-minimal";
-    }
-
-    function signalBadge(signal){
-      return `<span class="signal-badge ${sigClass(signal)}">${esc(signal || "Unknown")}</span>`;
-    }
-
     function metric(label, value, sub = ""){
       return `
         <div class="metric">
@@ -473,181 +337,467 @@
       `;
     }
 
-    function renderQuickPanel(title, win, fallbackText){
-      if (!win){
-        return `
-          <div class="panel">
-            <h2>${esc(title)}</h2>
-            <div class="empty">${esc(fallbackText)}</div>
-          </div>
-        `;
+    function formatShortLocal(localString){
+      if (!localString) return "—";
+      const dt = new Date(localString.replace(" CDT","").replace(" CST",""));
+      if (Number.isNaN(dt.getTime())) return localString;
+      return dt.toLocaleString("en-US", {
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit"
+      });
+    }
+
+    const nowLinePlugin = {
+      id: "nowLinePlugin",
+      afterDatasetsDraw(chart, args, pluginOptions){
+        const {ctx, chartArea, scales} = chart;
+        if (!chartArea || !pluginOptions?.xValue) return;
+
+        const xScale = scales.x;
+        if (!xScale) return;
+
+        const x = xScale.getPixelForValue(pluginOptions.xValue);
+        if (x < chartArea.left || x > chartArea.right) return;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(x, chartArea.top);
+        ctx.lineTo(x, chartArea.bottom);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "rgba(255,255,255,0.9)";
+        ctx.setLineDash([6,6]);
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(255,255,255,0.95)";
+        ctx.font = "bold 12px Inter, sans-serif";
+        ctx.fillText("NOW", x + 6, chartArea.top + 14);
+        ctx.restore();
       }
+    };
 
-      return `
-        <div class="panel">
-          <div class="card-top">
-            <div>
-              <h2>${esc(title)}</h2>
-              <div class="muted small">${esc(win.window_label || "")}</div>
-            </div>
-            ${signalBadge(win.signal)}
-          </div>
+    const hiloPlugin = {
+      id: "hiloPlugin",
+      afterDatasetsDraw(chart, args, pluginOptions){
+        const markers = pluginOptions?.markers || [];
+        const {ctx, chartArea, scales} = chart;
+        const xScale = scales.x;
+        const yScale = scales.y;
 
-          <div class="timepair">
-            <div class="timebox">
-              <div class="timebox-label">Low Tide</div>
-              <div class="timebox-main">${esc(win.low_tide_time_local || "—")}</div>
-              <div class="timebox-sub">${num(win.low_tide_ft_mllw, 3, " ft MLLW")}</div>
-            </div>
-            <div class="timebox">
-              <div class="timebox-label">High Tide</div>
-              <div class="timebox-main">${esc(win.high_tide_time_local || "—")}</div>
-              <div class="timebox-sub">${num(win.high_tide_ft_mllw, 3, " ft MLLW")}</div>
-            </div>
-          </div>
+        if (!xScale || !yScale || !chartArea) return;
 
-          <div class="metrics">
-            ${metric("Ga", num(win.ga_kt, 1, " kt"))}
-            ${metric("Gf", num(win.gf_kt, 0, " kt"))}
-            ${metric("PETSS Surge", num(win.petss_max_surge_ft, 3, " ft"))}
-            ${metric("Score", num(win.signal_score, 0))}
-          </div>
-        </div>
-      `;
-    }
+        ctx.save();
 
-    function renderWindowCard(win, activeWindowUtc){
-      const isActive = activeWindowUtc && win.low_tide_time_utc === activeWindowUtc;
-      const windRows = Array.isArray(win.wind_samples) ? win.wind_samples : [];
-      const reasons = Array.isArray(win.signal_reasons) ? win.signal_reasons : [];
+        markers.forEach(m => {
+          const x = xScale.getPixelForValue(m.time_utc);
+          if (x < chartArea.left || x > chartArea.right) return;
 
-      return `
-        <div class="panel window-card ${isActive ? "active" : ""}">
-          <div class="card-top">
-            <div>
-              <div class="window-title">${esc(win.window_label || "Window")}</div>
-              <div class="muted small">${esc(win.favorable_direction_rule || "")}</div>
-            </div>
-            ${signalBadge(win.signal)}
-          </div>
+          ctx.beginPath();
+          ctx.moveTo(x, chartArea.bottom);
+          ctx.lineTo(x, chartArea.bottom - 14);
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = m.type === "H" ? "rgba(183,140,255,0.95)" : "rgba(79,209,139,0.95)";
+          ctx.stroke();
 
-          <div class="timepair">
-            <div class="timebox">
-              <div class="timebox-label">Low Tide</div>
-              <div class="timebox-main">${esc(win.low_tide_time_local || "—")}</div>
-              <div class="timebox-sub">${num(win.low_tide_ft_mllw, 3, " ft MLLW")}</div>
-            </div>
-            <div class="timebox">
-              <div class="timebox-label">High Tide</div>
-              <div class="timebox-main">${esc(win.high_tide_time_local || "—")}</div>
-              <div class="timebox-sub">${num(win.high_tide_ft_mllw, 3, " ft MLLW")}</div>
-            </div>
-          </div>
+          ctx.fillStyle = m.type === "H" ? "rgba(183,140,255,0.95)" : "rgba(79,209,139,0.95)";
+          ctx.font = "bold 11px Inter, sans-serif";
+          const label = `${m.type} ${m.value_ft ?? "—"} ft`;
+          ctx.save();
+          ctx.translate(x + 4, chartArea.bottom - 18);
+          ctx.rotate(-Math.PI / 2);
+          ctx.fillText(label, 0, 0);
+          ctx.restore();
+        });
 
-          <div class="metrics">
-            ${metric("Ga", num(win.ga_kt, 1, " kt"), "Average favorable gust")}
-            ${metric("Gf", num(win.gf_kt, 0, " kt"), esc(win.gf_logic_note || ""))}
-            ${metric("PETSS Surge", num(win.petss_max_surge_ft, 3, " ft"), win.petss_max_surge_time_local ? `Peak at ${esc(win.petss_max_surge_time_local)}` : "")}
-            ${metric("PETSS TWL", num(win.petss_max_twl_ft, 3, " ft"), win.petss_max_twl_time_local ? `Peak at ${esc(win.petss_max_twl_time_local)}` : "")}
-            ${metric("Fav Hours", num(win.favorable_nbm_points_in_window, 0), `${num(win.nbm_points_in_window, 0)} total hourly points`)}
-            ${metric("Signal Score", num(win.signal_score, 0), "Blended wind + PETSS context")}
-          </div>
+        ctx.restore();
+      }
+    };
 
-          ${reasons.length ? `
-            <ul class="reason-list">
-              ${reasons.map(r => `<li>${esc(r)}</li>`).join("")}
-            </ul>
-          ` : ""}
+    const favorableShadePlugin = {
+      id: "favorableShadePlugin",
+      beforeDatasetsDraw(chart, args, pluginOptions){
+        const periods = pluginOptions?.periods || [];
+        const {ctx, chartArea, scales} = chart;
+        const xScale = scales.x;
 
-          <div class="samples">
-            <details>
-              <summary>Show hourly wind samples (${windRows.length})</summary>
-              ${windRows.length ? `
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Local Time</th>
-                      <th>Dir</th>
-                      <th>WSP</th>
-                      <th>GST</th>
-                      <th>Fav?</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    ${windRows.map(r => `
-                      <tr>
-                        <td>${esc(r.valid_time_local || "—")}</td>
-                        <td>${r.wind_dir_deg ?? "—"}°</td>
-                        <td>${num(r.wsp_kt, 1, " kt")}</td>
-                        <td>${num(r.gst_kt, 1, " kt")}</td>
-                        <td class="${r.is_favorable ? "yes" : "no"}">${r.is_favorable ? "Yes" : "No"}</td>
-                      </tr>
-                    `).join("")}
-                  </tbody>
-                </table>
-              ` : `<div class="empty" style="margin-top:10px;">No hourly wind samples were available in this window.</div>`}
-            </details>
-          </div>
-        </div>
-      `;
-    }
+        if (!xScale || !chartArea) return;
 
-    function renderPage(status, data){
-      const windows = Array.isArray(data?.windows) ? data.windows : [];
-      const activeWindow = status?.active_window || null;
-      const nextWindow = status?.next_window || null;
-      const activeWindowUtc = activeWindow?.low_tide_time_utc || null;
+        ctx.save();
 
-      lastUpdatedEl.textContent = data?.generated_local
-        ? `Updated ${data.generated_local}`
-        : "Updated time unavailable";
+        periods.forEach(p => {
+          const x1 = xScale.getPixelForValue(p.start_utc);
+          const x2 = xScale.getPixelForValue(p.end_utc);
 
-      app.classList.remove("loading");
+          const left = Math.max(chartArea.left, Math.min(x1, x2));
+          const right = Math.min(chartArea.right, Math.max(x1, x2));
+          const width = right - left;
+
+          if (width <= 0) return;
+
+          ctx.fillStyle = "rgba(255, 77, 90, 0.08)";
+          ctx.fillRect(left, chartArea.top, width, chartArea.bottom - chartArea.top);
+        });
+
+        ctx.restore();
+      }
+    };
+
+    Chart.register(nowLinePlugin, hiloPlugin, favorableShadePlugin);
+
+    function renderScaffold(data, status){
+      const summary = data.summary || {};
+      const nextHigh = summary.next_high_tide;
+      const nextLow = summary.next_low_tide;
+
       app.innerHTML = `
-        <div class="headline">
+        <div class="panel headline">
           <div class="headline-top">
             <div>
-              <div class="headline-title">${esc(status?.headline || "No headline available")}</div>
+              <div class="headline-title">${esc(status?.headline || data?.headline || "No headline available")}</div>
               <div class="headline-meta">
-                ${esc(data?.station_name || "Unknown station")} ·
-                Wind source: ${esc(data?.wind_source_station_label || "Unknown")} ·
-                ${num(data?.window_count, 0)} windows loaded
+                ${esc(data.station_name || "Unknown station")} ·
+                Wind source: ${esc(data.wind_source_station_label || "Unknown")} ·
+                ${num(data.series_count, 0)} plotted hours
               </div>
             </div>
-            ${signalBadge(activeWindow?.signal || nextWindow?.signal || "Minimal")}
           </div>
         </div>
 
-        <div class="grid grid-2" style="margin-bottom:16px;">
-          ${renderQuickPanel("Active Window", activeWindow, "No window is currently active.")}
-          ${renderQuickPanel("Next Window", nextWindow, "No upcoming low-to-high tide window found.")}
+        <div class="grid grid-4" style="margin-bottom:16px;">
+          ${metric("Max Surge", num(summary.max_surge_ft, 2, " ft"), summary.max_surge_time_local ? `Peak at ${esc(summary.max_surge_time_local)}` : "")}
+          ${metric("Max TWL", num(summary.max_twl_ft, 2, " ft"), summary.max_twl_time_local ? `Peak at ${esc(summary.max_twl_time_local)}` : "")}
+          ${metric("Max Gust", num(summary.max_gust_kt, 0, " kt"), summary.max_gust_time_local ? `Peak at ${esc(summary.max_gust_time_local)}` : "")}
+          ${metric("Next High Tide", nextHigh ? num(nextHigh.value_ft, 2, " ft") : "—", nextHigh ? esc(nextHigh.time_local) : "No upcoming high tide in range")}
         </div>
 
         <div class="panel" style="margin-bottom:16px;">
-          <h2>Current Rule Set</h2>
-          <div class="metrics">
-            ${metric("Direction Rule", esc(data?.direction_rule || "—"))}
-            ${metric("Range 1", Array.isArray(data?.direction_rule_degrees?.range_1) ? `${data.direction_rule_degrees.range_1[0]}°–${data.direction_rule_degrees.range_1[1]}°` : "—")}
-            ${metric("Range 2", Array.isArray(data?.direction_rule_degrees?.range_2) ? `${data.direction_rule_degrees.range_2[0]}°–${data.direction_rule_degrees.range_2[1]}°` : "—")}
-            ${metric("Generated", esc(data?.generated_local || "—"))}
+          <div class="toggle-row">
+            <label class="toggle"><input type="checkbox" id="toggleSurgeBand" checked> Show surge 10–90% band</label>
+            <label class="toggle"><input type="checkbox" id="toggleTwlBand"> Show TWL 10–90% band</label>
+            <label class="toggle"><input type="checkbox" id="toggleGusts" checked> Show gusts</label>
+            <label class="toggle"><input type="checkbox" id="toggleObs"> Show observed water level</label>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="surgeChart"></canvas>
+          </div>
+          <div class="legend-note">
+            Red background shading marks hours with favorable post-frontal wind direction.
           </div>
         </div>
 
-        <div class="grid grid-3">
-          ${
-            windows.length
-              ? windows.map(w => renderWindowCard(w, activeWindowUtc)).join("")
-              : `<div class="empty">No windows found in dashboard_data.json. Either the source data is empty or the calculator produced nothing useful. Fun.</div>`
-          }
+        <div class="grid grid-2">
+          <div class="panel">
+            <h2 style="margin-top:0;">Next Tide Markers</h2>
+            <table>
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Time</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${
+                  (data.hilo_markers || []).slice(0, 10).map(r => `
+                    <tr>
+                      <td>${esc(r.type === "H" ? "High" : "Low")}</td>
+                      <td>${esc(r.time_local || "—")}</td>
+                      <td>${num(r.value_ft, 2, " ft")}</td>
+                    </tr>
+                  `).join("") || `<tr><td colspan="3" class="muted">No tide markers available.</td></tr>`
+                }
+              </tbody>
+            </table>
+          </div>
+
+          <div class="panel">
+            <h2 style="margin-top:0;">Rule / Context</h2>
+            <table>
+              <tbody>
+                <tr>
+                  <th>Direction Rule</th>
+                  <td>${esc(data.direction_rule || "—")}</td>
+                </tr>
+                <tr>
+                  <th>Degrees</th>
+                  <td>
+                    ${
+                      data.direction_rule_degrees
+                        ? `${data.direction_rule_degrees.range_1[0]}–${data.direction_rule_degrees.range_1[1]}°, ${data.direction_rule_degrees.range_2[0]}–${data.direction_rule_degrees.range_2[1]}°`
+                        : "—"
+                    }
+                  </td>
+                </tr>
+                <tr>
+                  <th>Now</th>
+                  <td>${esc(data.now_local || "—")}</td>
+                </tr>
+                <tr>
+                  <th>Next Low Tide</th>
+                  <td>${nextLow ? `${esc(nextLow.time_local)} (${num(nextLow.value_ft, 2, " ft")})` : "—"}</td>
+                </tr>
+                <tr>
+                  <th>Next High Tide</th>
+                  <td>${nextHigh ? `${esc(nextHigh.time_local)} (${num(nextHigh.value_ft, 2, " ft")})` : "—"}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       `;
     }
 
+    function buildChart(data){
+      const series = Array.isArray(data.series) ? data.series : [];
+      const labels = series.map(r => r.time_utc);
+
+      const surge = series.map(r => r.surge_ft);
+      const surge10 = series.map(r => r.surge10_ft);
+      const surge90 = series.map(r => r.surge90_ft);
+
+      const twl = series.map(r => r.twl_ft);
+      const twl10 = series.map(r => r.twl10_ft);
+      const twl90 = series.map(r => r.twl90_ft);
+
+      const tide = series.map(r => r.tide_ft);
+      const obs = series.map(r => r.obs_ft);
+      const gust = series.map(r => r.wind_gust_kt);
+
+      const ctx = document.getElementById("surgeChart").getContext("2d");
+
+      if (chart) {
+        chart.destroy();
+        chart = null;
+      }
+
+      chart = new Chart(ctx, {
+        type: "line",
+        data: {
+          labels,
+          datasets: [
+            {
+              label: "Surge 10th",
+              data: surge10,
+              borderColor: "rgba(0,0,0,0)",
+              pointRadius: 0,
+              borderWidth: 0,
+              tension: 0.22
+            },
+            {
+              label: "Surge 10–90%",
+              data: surge90,
+              borderColor: "rgba(255,77,90,0)",
+              backgroundColor: "rgba(255,77,90,0.16)",
+              pointRadius: 0,
+              borderWidth: 0,
+              fill: "-1",
+              tension: 0.22,
+              hidden: false
+            },
+            {
+              label: "TWL 10th",
+              data: twl10,
+              borderColor: "rgba(0,0,0,0)",
+              pointRadius: 0,
+              borderWidth: 0,
+              tension: 0.22,
+              hidden: true
+            },
+            {
+              label: "TWL 10–90%",
+              data: twl90,
+              borderColor: "rgba(92,200,255,0)",
+              backgroundColor: "rgba(92,200,255,0.11)",
+              pointRadius: 0,
+              borderWidth: 0,
+              fill: "-1",
+              tension: 0.22,
+              hidden: true
+            },
+            {
+              label: "Surge",
+              data: surge,
+              borderColor: "rgba(255,77,90,1)",
+              backgroundColor: "rgba(255,77,90,1)",
+              borderWidth: 3,
+              pointRadius: 0,
+              tension: 0.22,
+              yAxisID: "y"
+            },
+            {
+              label: "Total Water Level",
+              data: twl,
+              borderColor: "rgba(92,200,255,1)",
+              backgroundColor: "rgba(92,200,255,1)",
+              borderWidth: 3,
+              pointRadius: 0,
+              tension: 0.22,
+              yAxisID: "y"
+            },
+            {
+              label: "Astronomical Tide",
+              data: tide,
+              borderColor: "rgba(210,220,235,0.9)",
+              backgroundColor: "rgba(210,220,235,0.9)",
+              borderWidth: 2,
+              pointRadius: 0,
+              tension: 0.22,
+              yAxisID: "y"
+            },
+            {
+              label: "Observed Water Level",
+              data: obs,
+              borderColor: "rgba(79,209,139,1)",
+              backgroundColor: "rgba(79,209,139,1)",
+              borderWidth: 2,
+              pointRadius: 0,
+              tension: 0.22,
+              yAxisID: "y",
+              hidden: true
+            },
+            {
+              label: "KNEW Gust",
+              data: gust,
+              borderColor: "rgba(255,180,84,1)",
+              backgroundColor: "rgba(255,180,84,1)",
+              borderWidth: 2,
+              pointRadius: 0,
+              tension: 0.18,
+              yAxisID: "y1"
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            mode: "index",
+            intersect: false
+          },
+          plugins: {
+            legend: {
+              labels: {
+                color: "#eaf1ff",
+                boxWidth: 14,
+                usePointStyle: false,
+                filter: (item) => !["Surge 10th", "TWL 10th"].includes(item.text)
+              }
+            },
+            tooltip: {
+              backgroundColor: "rgba(10,16,27,0.96)",
+              borderColor: "rgba(255,255,255,0.12)",
+              borderWidth: 1,
+              titleColor: "#ffffff",
+              bodyColor: "#eaf1ff",
+              callbacks: {
+                title(items){
+                  const idx = items[0]?.dataIndex ?? 0;
+                  const row = series[idx];
+                  return row?.time_local || items[0]?.label || "";
+                },
+                afterBody(items){
+                  const idx = items[0]?.dataIndex ?? 0;
+                  const row = series[idx];
+                  if (!row) return [];
+
+                  const extras = [];
+                  if (row.wind_dir_deg != null) extras.push(`Wind dir: ${row.wind_dir_deg}°`);
+                  if (row.wind_speed_kt != null) extras.push(`Wind speed: ${row.wind_speed_kt.toFixed(1)} kt`);
+                  if (row.wind_gust_kt != null) extras.push(`Wind gust: ${row.wind_gust_kt.toFixed(1)} kt`);
+                  extras.push(`Favorable wind: ${row.is_favorable_wind ? "Yes" : "No"}`);
+                  return extras;
+                }
+              }
+            },
+            nowLinePlugin: {
+              xValue: data.now_utc
+            },
+            hiloPlugin: {
+              markers: data.hilo_markers || []
+            },
+            favorableShadePlugin: {
+              periods: data.favorable_periods || []
+            }
+          },
+          scales: {
+            x: {
+              ticks: {
+                color: "#b8c7dd",
+                maxRotation: 0,
+                autoSkip: true,
+                callback(value, index){
+                  const raw = labels[index];
+                  const dt = new Date(raw);
+                  if (Number.isNaN(dt.getTime())) return raw;
+                  return dt.toLocaleString("en-US", {
+                    month: "numeric",
+                    day: "numeric",
+                    hour: "numeric"
+                  });
+                }
+              },
+              grid: {
+                color: "rgba(255,255,255,0.06)"
+              }
+            },
+            y: {
+              title: {
+                display: true,
+                text: "Water Level / Surge (ft)",
+                color: "#dce8fb"
+              },
+              ticks: {
+                color: "#dce8fb"
+              },
+              grid: {
+                color: "rgba(255,255,255,0.07)"
+              }
+            },
+            y1: {
+              position: "right",
+              title: {
+                display: true,
+                text: "Wind Gust (kt)",
+                color: "#ffd8a1"
+              },
+              ticks: {
+                color: "#ffd8a1"
+              },
+              grid: {
+                drawOnChartArea: false
+              }
+            }
+          }
+        }
+      });
+
+      document.getElementById("toggleSurgeBand").addEventListener("change", (e) => {
+        chart.setDatasetVisibility(1, e.target.checked);
+        chart.update();
+      });
+
+      document.getElementById("toggleTwlBand").addEventListener("change", (e) => {
+        chart.setDatasetVisibility(3, e.target.checked);
+        chart.update();
+      });
+
+      document.getElementById("toggleGusts").addEventListener("change", (e) => {
+        chart.setDatasetVisibility(8, e.target.checked);
+        chart.update();
+      });
+
+      document.getElementById("toggleObs").addEventListener("change", (e) => {
+        chart.setDatasetVisibility(7, e.target.checked);
+        chart.update();
+      });
+    }
+
     function renderError(err){
-      app.classList.remove("loading");
       app.innerHTML = `
         <div class="error">
-          <strong>Could not load dashboard data.</strong><br>
+          <strong>Could not load surge chart data.</strong><br>
           ${esc(err?.message || String(err))}
         </div>
       `;
@@ -657,18 +807,26 @@
     async function loadDashboard(){
       refreshBtn.disabled = true;
       refreshBtn.textContent = "Refreshing...";
+
       try{
-        const [statusRes, dataRes] = await Promise.all([
-          fetch(bust(STATUS_URL), { cache: "no-store" }),
-          fetch(bust(DATA_URL), { cache: "no-store" })
+        const [dataRes, statusRes] = await Promise.all([
+          fetch(bust(DATA_URL), { cache: "no-store" }),
+          fetch(bust(STATUS_URL), { cache: "no-store" })
         ]);
 
+        if (!dataRes.ok) throw new Error(`chart_data.json returned ${dataRes.status}`);
         if (!statusRes.ok) throw new Error(`dashboard_status.json returned ${statusRes.status}`);
-        if (!dataRes.ok) throw new Error(`dashboard_data.json returned ${dataRes.status}`);
 
-        const status = await statusRes.json();
         const data = await dataRes.json();
-        renderPage(status, data);
+        const status = await statusRes.json();
+
+        lastUpdatedEl.textContent = data?.generated_local
+          ? `Updated ${data.generated_local}`
+          : "Updated time unavailable";
+
+        renderScaffold(data, status);
+        buildChart(data);
+
         countdown = REFRESH_SECONDS;
       } catch (err){
         renderError(err);
@@ -680,14 +838,17 @@
 
     function startCountdown(){
       if (countdownTimer) clearInterval(countdownTimer);
+
       countdownPillEl.textContent = `Auto refresh in ${countdown}s`;
 
       countdownTimer = setInterval(() => {
         countdown -= 1;
+
         if (countdown <= 0){
           countdown = REFRESH_SECONDS;
           loadDashboard();
         }
+
         countdownPillEl.textContent = `Auto refresh in ${countdown}s`;
       }, 1000);
     }
