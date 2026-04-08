@@ -108,41 +108,43 @@ jobs:
           info_out = out_dir / "knew_nbm_source_info.json"
           meta_out = out_dir / "knew_nbm_latest_metadata.json"
 
-          text = nbm_file.read_text(errors="replace")
-
-          # NOAA NBM bulletins might use different variations for this location:
-          # NEWC1 (New Canal Station NDBC buoy), KNEW (ICAO), NEW (FAA), or NEWC
-          target_stations = ["NEWC1", "KNEW", "NEW", "NEWC"]
+          target_stations = {"NEWC1", "KNEW", "NEW", "NEWC"}
           
-          # Split text into blocks starting with a station identifier and "NBH"
-          # This is much safer than heavy regex lookaheads across a massive text file
-          blocks = re.split(r'(?m)^\s*(?=[A-Z0-9]{3,7}\s+NBH)', text)
-          
-          station_block = None
           station_found = None
-          
-          for block in blocks:
-              if not block.strip():
-                  continue
-              for st in target_stations:
-                  if re.match(rf"^\s*{st}\b", block):
-                      station_block = block
-                      station_found = st
-                      break
-              if station_block:
-                  break
+          block_lines = []
+          in_block = False
 
-          if not station_block:
+          # Process the massive 28MB file line-by-line to avoid regex crashes
+          with nbm_file.open("r", encoding="utf-8", errors="replace") as f:
+              for line in f:
+                  parts = line.split()
+                  
+                  # Look for the header line: "  KNEW    NBM V4.3 NBH GUIDANCE..."
+                  if len(parts) >= 3 and parts[1].startswith("NBM"):
+                      st = parts[0]
+                      if st in target_stations:
+                          in_block = True
+                          station_found = st
+                          block_lines.append(line)
+                          continue
+                      elif in_block:
+                          # We hit the next station's header block, so we are done collecting
+                          break
+                  
+                  if in_block:
+                      block_lines.append(line)
+
+          if not station_found:
               raise SystemExit(
-                  f"ERROR: Could not find any of {target_stations} in the NBM bulletin. "
-                  "Check the 'Preview downloaded bulletin' action log to verify the identifier."
+                  f"ERROR: Could not find any of {target_stations} in the NBM bulletin."
               )
 
           station = station_found
-          block = station_block.strip() + "\n"
+          block = "".join(block_lines)
           raw_out.write_text(block)
 
-          lines = [ln.rstrip("\n") for ln in block.splitlines() if ln.strip()]
+          # Clean and process the collected block lines
+          lines = [ln.rstrip("\n") for ln in block_lines if ln.strip()]
           if not lines:
               raise SystemExit(f"ERROR: Extracted {station} block is empty.")
 
