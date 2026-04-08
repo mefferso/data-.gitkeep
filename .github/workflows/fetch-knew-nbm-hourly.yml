@@ -80,8 +80,8 @@ jobs:
           head -40 "$NBM_FILE" || true
 
           echo
-          echo "Searching for NEW in bulletin:"
-          grep -n "NEW" "$NBM_FILE" | head -20 || true
+          echo "Searching for NEWC in bulletin:"
+          grep -nE '(^|[[:space:]])NEWC([[:space:]]|$)' "$NBM_FILE" | head -20 || true
 
       - name: Extract KNEW station block and write parsed hourly CSV
         shell: bash
