@@ -1,0 +1,306 @@
+name: Fetch KNEW NBM Hourly
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Prepare folders
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p downloads data/surge_dashboard
+          rm -f downloads/*
+          rm -f data/surge_dashboard/knew_*
+
+      - name: Download latest available NBM hourly text bulletin
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FOUND=""
+          FOUND_URL=""
+          CYCLE_DATE=""
+          CYCLE_HOUR=""
+
+          # Look back hour-by-hour so we grab the newest available bulletin
+          for OFFSET in $(seq 0 18); do
+            CANDIDATE=$(date -u -d "-${OFFSET} hour" +%Y%m%d%H)
+            DATE=${CANDIDATE:0:8}
+            HH=${CANDIDATE:8:2}
+
+            URL="https://noaa-nbm-grib2-pds.s3.amazonaws.com/blend.${DATE}/${HH}/text/blend_nbhtx.t${HH}z"
+
+            echo "Trying $URL"
+
+            if curl -f -L --retry 3 --retry-delay 5 --connect-timeout 30 \
+              "$URL" -o downloads/blend_nbhtx_latest.txt; then
+              echo "Downloaded latest bulletin from $URL"
+              FOUND="downloads/blend_nbhtx_latest.txt"
+              FOUND_URL="$URL"
+              CYCLE_DATE="$DATE"
+              CYCLE_HOUR="$HH"
+              break
+            fi
+          done
+
+          if [ -z "$FOUND" ]; then
+            echo "ERROR: Could not find a recent NBM hourly bulletin."
+            exit 1
+          fi
+
+          echo "NBM_FILE=$FOUND" >> "$GITHUB_ENV"
+          echo "NBM_URL=$FOUND_URL" >> "$GITHUB_ENV"
+          echo "NBM_CYCLE_DATE=$CYCLE_DATE" >> "$GITHUB_ENV"
+          echo "NBM_CYCLE_HOUR=$CYCLE_HOUR" >> "$GITHUB_ENV"
+
+          echo "Downloaded file: $FOUND"
+          echo "Cycle date: $CYCLE_DATE"
+          echo "Cycle hour: $CYCLE_HOUR"
+          ls -lh "$FOUND"
+          file "$FOUND"
+
+      - name: Preview downloaded bulletin
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "First 40 lines of downloaded bulletin:"
+          head -40 "$NBM_FILE" || true
+
+          echo
+          echo "Searching for KNEW in bulletin:"
+          grep -n "KNEW" "$NBM_FILE" | head -20 || true
+
+      - name: Extract KNEW station block and write parsed hourly CSV
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import csv
+          import json
+          import os
+          import re
+          from pathlib import Path
+          from datetime import datetime, timedelta, timezone
+
+          station = "KNEW"
+
+          nbm_file = Path(os.environ["NBM_FILE"])
+          cycle_date = os.environ["NBM_CYCLE_DATE"]
+          cycle_hour = os.environ["NBM_CYCLE_HOUR"]
+          source_url = os.environ["NBM_URL"]
+
+          out_dir = Path("data/surge_dashboard")
+          out_dir.mkdir(parents=True, exist_ok=True)
+
+          raw_out = out_dir / "knew_nbm_raw.txt"
+          csv_out = out_dir / "knew_nbm_hourly.csv"
+          info_out = out_dir / "knew_nbm_source_info.json"
+          meta_out = out_dir / "knew_nbm_latest_metadata.json"
+
+          text = nbm_file.read_text(errors="replace")
+
+          # Standard block match: start at "KNEW NBH ..." and stop before next station block
+          pattern = re.compile(
+              rf"(?ms)^{station}\s+NBH[^\n]*\n.*?(?=^[A-Z0-9]{{3,5}}\s+NBH\b|\Z)"
+          )
+          m = pattern.search(text)
+
+          # Slightly more permissive fallback if the heading is formatted a little differently
+          if not m:
+              fallback = re.compile(
+                  rf"(?ms)^{station}\b.*?(?=^[A-Z0-9]{{3,5}}\s+NBH\b|\Z)"
+              )
+              m = fallback.search(text)
+
+          if not m:
+              raise SystemExit(
+                  "ERROR: Could not find KNEW station block in NBM bulletin. "
+                  "Check the action log step 'Preview downloaded bulletin' to see whether KNEW is present."
+              )
+
+          block = m.group(0).strip() + "\n"
+          raw_out.write_text(block)
+
+          lines = [ln.rstrip("\n") for ln in block.splitlines() if ln.strip()]
+          if not lines:
+              raise SystemExit("ERROR: Extracted KNEW block is empty.")
+
+          rows = {}
+
+          # Parse rows like:
+          # UTC 01 02 03 ...
+          # WDR 31 32 33 ...
+          # WSP 10 15 18 ...
+          # GST 20 24 28 ...
+          row_re = re.compile(r"^([A-Z0-9]{3})\s+(.*)$")
+
+          for line in lines[1:]:
+              mm = row_re.match(line.strip())
+              if not mm:
+                  continue
+              key = mm.group(1)
+              rest = mm.group(2).strip()
+              if not rest:
+                  continue
+              rows[key] = re.split(r"\s+", rest)
+
+          if not rows:
+              raise SystemExit("ERROR: No parseable rows found inside KNEW block.")
+
+          def clean_token(tok):
+              tok = tok.strip()
+              if tok in {"", "-99", "MM", "/", "//", "///"}:
+                  return None
+              return tok
+
+          def parse_num(tok):
+              tok = clean_token(tok)
+              if tok is None:
+                  return None
+              try:
+                  return int(tok)
+              except Exception:
+                  try:
+                      return float(tok)
+                  except Exception:
+                      return None
+
+          # Prefer FHR if present. If not, fall back to 1..N
+          ncols = 0
+          for key in ("FHR", "UTC", "WDR", "WSP", "GST"):
+              ncols = max(ncols, len(rows.get(key, [])))
+
+          if ncols == 0:
+              raise SystemExit("ERROR: Could not determine number of forecast columns.")
+
+          cycle_dt = datetime.strptime(f"{cycle_date}{cycle_hour}", "%Y%m%d%H").replace(tzinfo=timezone.utc)
+
+          fhr_tokens = rows.get("FHR", [])
+          fhrs = []
+          for i in range(ncols):
+              if i < len(fhr_tokens):
+                  fhr_val = parse_num(fhr_tokens[i])
+                  if fhr_val is None:
+                      fhrs.append(i + 1)
+                  else:
+                      fhrs.append(int(fhr_val))
+              else:
+                  fhrs.append(i + 1)
+
+          utc_tokens = rows.get("UTC", [])
+
+          with csv_out.open("w", newline="") as f:
+              writer = csv.writer(f)
+              writer.writerow([
+                  "cycle_time_utc",
+                  "valid_time_utc",
+                  "forecast_hour",
+                  "utc_token",
+                  "wdr_code",
+                  "wind_dir_deg",
+                  "wsp_kt",
+                  "gst_kt"
+              ])
+
+              for i in range(ncols):
+                  fhr = fhrs[i]
+                  valid_dt = cycle_dt + timedelta(hours=fhr)
+
+                  utc_token = utc_tokens[i] if i < len(utc_tokens) else ""
+
+                  wdr_raw = rows.get("WDR", [None] * ncols)[i] if i < len(rows.get("WDR", [])) else None
+                  wsp_raw = rows.get("WSP", [None] * ncols)[i] if i < len(rows.get("WSP", [])) else None
+                  gst_raw = rows.get("GST", [None] * ncols)[i] if i < len(rows.get("GST", [])) else None
+
+                  wdr_num = parse_num(wdr_raw)
+                  wsp_num = parse_num(wsp_raw)
+                  gst_num = parse_num(gst_raw)
+
+                  if wdr_num is None:
+                      wind_dir_deg = None
+                      wdr_code = None
+                  else:
+                      wdr_code = int(wdr_num)
+                      # NBM WDR is nearest tens degrees, with north = 36
+                      if 0 <= wdr_code <= 36:
+                          wind_dir_deg = 360 if wdr_code == 36 else wdr_code * 10
+                      else:
+                          wind_dir_deg = wdr_code
+
+                  writer.writerow([
+                      cycle_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                      valid_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                      fhr,
+                      utc_token,
+                      wdr_code if wdr_code is not None else "",
+                      wind_dir_deg if wind_dir_deg is not None else "",
+                      wsp_num if wsp_num is not None else "",
+                      gst_num if gst_num is not None else "",
+                  ])
+
+          source_info = {
+              "station": station,
+              "source_url": source_url,
+              "downloaded_file": str(nbm_file),
+              "cycle_date_utc": cycle_date,
+              "cycle_hour_utc": cycle_hour,
+              "raw_station_block_file": str(raw_out),
+              "parsed_csv_file": str(csv_out),
+          }
+          info_out.write_text(json.dumps(source_info, indent=2))
+
+          metadata = {
+              "fetched_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "station": station,
+              "nbm_cycle_time_utc": cycle_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "source_url": source_url,
+              "raw_station_block_file": str(raw_out),
+              "parsed_csv_file": str(csv_out),
+          }
+          meta_out.write_text(json.dumps(metadata, indent=2))
+
+          print(f"Created {raw_out}")
+          print(f"Created {csv_out}")
+          print(f"Created {info_out}")
+          print(f"Created {meta_out}")
+          PY
+
+      - name: Show parsed CSV preview
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "Preview of parsed CSV:"
+          head -20 data/surge_dashboard/knew_nbm_hourly.csv || true
+
+      - name: Commit updated KNEW NBM files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add data/surge_dashboard/knew_*
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Update KNEW NBM hourly inputs"
+          git push
