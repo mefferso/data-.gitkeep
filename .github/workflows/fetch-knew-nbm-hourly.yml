@@ -79,8 +79,8 @@ jobs:
           head -40 "$NBM_FILE" || true
 
           echo
-          echo "Searching for KNEW in bulletin:"
-          grep -nE '(^|[[:space:]])KNEW([[:space:]]|$)' "$NBM_FILE" | head -20 || true
+          echo "Searching for target stations (NEWC1, KNEW, NEW, NEWC) in bulletin:"
+          grep -nE '^[[:space:]]*(NEWC1|KNEW|NEW|NEWC)[[:space:]]' "$NBM_FILE" | head -20 || true
 
       - name: Extract KNEW station block and write parsed hourly CSV
         shell: bash
@@ -94,8 +94,6 @@ jobs:
           import re
           from pathlib import Path
           from datetime import datetime, timedelta, timezone
-
-          station = "KNEW"
 
           nbm_file = Path(os.environ["NBM_FILE"])
           cycle_date = os.environ["NBM_CYCLE_DATE"]
@@ -112,31 +110,41 @@ jobs:
 
           text = nbm_file.read_text(errors="replace")
 
-          # Match a station block whose header line contains the station code and "NBH"
-          pattern = re.compile(
-              rf"(?ms)^{station}\b[^\n]*NBH[^\n]*\n.*?(?=^[A-Z0-9]{{3,5}}\b[^\n]*NBH\b|\Z)"
-          )
-          m = pattern.search(text)
+          # NOAA NBM bulletins might use different variations for this location:
+          # NEWC1 (New Canal Station NDBC buoy), KNEW (ICAO), NEW (FAA), or NEWC
+          target_stations = ["NEWC1", "KNEW", "NEW", "NEWC"]
+          
+          # Split text into blocks starting with a station identifier and "NBH"
+          # This is much safer than heavy regex lookaheads across a massive text file
+          blocks = re.split(r'(?m)^\s*(?=[A-Z0-9]{3,7}\s+NBH)', text)
+          
+          station_block = None
+          station_found = None
+          
+          for block in blocks:
+              if not block.strip():
+                  continue
+              for st in target_stations:
+                  if re.match(rf"^\s*{st}\b", block):
+                      station_block = block
+                      station_found = st
+                      break
+              if station_block:
+                  break
 
-          # More permissive fallback
-          if not m:
-              fallback = re.compile(
-                  rf"(?ms)^{station}\b.*?(?=^[A-Z0-9]{{3,5}}\b[^\n]*NBH\b|\Z)"
-              )
-              m = fallback.search(text)
-
-          if not m:
+          if not station_block:
               raise SystemExit(
-                  "ERROR: Could not find KNEW station block in NBM bulletin. "
-                  "Check the action log step 'Preview downloaded bulletin' to see whether KNEW is present."
+                  f"ERROR: Could not find any of {target_stations} in the NBM bulletin. "
+                  "Check the 'Preview downloaded bulletin' action log to verify the identifier."
               )
 
-          block = m.group(0).strip() + "\n"
+          station = station_found
+          block = station_block.strip() + "\n"
           raw_out.write_text(block)
 
           lines = [ln.rstrip("\n") for ln in block.splitlines() if ln.strip()]
           if not lines:
-              raise SystemExit("ERROR: Extracted KNEW block is empty.")
+              raise SystemExit(f"ERROR: Extracted {station} block is empty.")
 
           rows = {}
           row_re = re.compile(r"^([A-Z0-9]{3})\s+(.*)$")
@@ -152,7 +160,7 @@ jobs:
               rows[key] = re.split(r"\s+", rest)
 
           if not rows:
-              raise SystemExit("ERROR: No parseable rows found inside KNEW block.")
+              raise SystemExit(f"ERROR: No parseable rows found inside {station} block.")
 
           def clean_token(tok):
               if tok is None:
@@ -266,7 +274,7 @@ jobs:
           }
           meta_out.write_text(json.dumps(metadata, indent=2))
 
-          print(f"Created {raw_out}")
+          print(f"Created {raw_out} using station {station}")
           print(f"Created {csv_out}")
           print(f"Created {info_out}")
           print(f"Created {meta_out}")
