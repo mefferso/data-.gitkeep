@@ -737,39 +737,38 @@
             }
           },
           scales: {
-             x: {
-                ticks: {
-                  color: "#b8c7dd",
-                  maxRotation: 0,
-                  autoSkip: false,
-                  padding: 8,
-                  callback(value, index) {
-                    const raw = labels[index];
-                    const dt = new Date(raw);
-                    if (Number.isNaN(dt.getTime())) return "";
-              
-                    const hour = dt.getHours();
-              
-                    // only show labels every 6 hours
-                    if (![0, 6, 12, 18].includes(hour)) return "";
-              
-                    const datePart = dt.toLocaleDateString("en-US", {
-                      month: "numeric",
-                      day: "numeric"
-                    });
-              
-                    const timePart = dt.toLocaleTimeString("en-US", {
-                      hour: "numeric",
-                      hour12: true
-                    });
-              
-                    return [datePart, timePart];
-                  }
-                },
-                grid: {
-                  color: "rgba(255,255,255,0.06)"
+            x: {
+              ticks: {
+                color: "#b8c7dd",
+                maxRotation: 0,
+                autoSkip: false,
+                padding: 8,
+                callback(value, index) {
+                  const raw = labels[index];
+                  const dt = new Date(raw);
+                  if (Number.isNaN(dt.getTime())) return "";
+
+                  const hour = dt.getHours();
+
+                  if (![0, 6, 12, 18].includes(hour)) return "";
+
+                  const datePart = dt.toLocaleDateString("en-US", {
+                    month: "numeric",
+                    day: "numeric"
+                  });
+
+                  const timePart = dt.toLocaleTimeString("en-US", {
+                    hour: "numeric",
+                    hour12: true
+                  });
+
+                  return [datePart, timePart];
                 }
               },
+              grid: {
+                color: "rgba(255,255,255,0.06)"
+              }
+            },
             y: {
               title: {
                 display: true,
