@@ -34,7 +34,6 @@ jobs:
           CYCLE_DATE=""
           CYCLE_HOUR=""
 
-          # Look back hour-by-hour so we grab the newest available bulletin
           for OFFSET in $(seq 0 18); do
             CANDIDATE=$(date -u -d "-${OFFSET} hour" +%Y%m%d%H)
             DATE=${CANDIDATE:0:8}
@@ -114,8 +113,8 @@ jobs:
           text = nbm_file.read_text(errors="replace")
 
           # Match a station block whose header line contains the station code and "NBH"
-            pattern = re.compile(
-                rf"(?ms)^{station}\b[^\n]*NBH[^\n]*\n.*?(?=^[A-Z0-9]{{3,5}}\b[^\n]*NBH\b|\Z)"
+          pattern = re.compile(
+              rf"(?ms)^{station}\b[^\n]*NBH[^\n]*\n.*?(?=^[A-Z0-9]{{3,5}}\b[^\n]*NBH\b|\Z)"
           )
           m = pattern.search(text)
 
@@ -123,12 +122,13 @@ jobs:
           if not m:
               fallback = re.compile(
                   rf"(?ms)^{station}\b.*?(?=^[A-Z0-9]{{3,5}}\b[^\n]*NBH\b|\Z)"
-               )
+              )
               m = fallback.search(text)
+
           if not m:
               raise SystemExit(
-                  "ERROR: Could not find KNEW station block in NBM bulletin. "
-                  "Check the action log step 'Preview downloaded bulletin' to see whether KNEW is present."
+                  "ERROR: Could not find NEWC station block in NBM bulletin. "
+                  "Check the action log step 'Preview downloaded bulletin' to see whether NEWC is present."
               )
 
           block = m.group(0).strip() + "\n"
@@ -136,15 +136,9 @@ jobs:
 
           lines = [ln.rstrip("\n") for ln in block.splitlines() if ln.strip()]
           if not lines:
-              raise SystemExit("ERROR: Extracted KNEW block is empty.")
+              raise SystemExit("ERROR: Extracted NEWC block is empty.")
 
           rows = {}
-
-          # Parse rows like:
-          # UTC 01 02 03 ...
-          # WDR 31 32 33 ...
-          # WSP 10 15 18 ...
-          # GST 20 24 28 ...
           row_re = re.compile(r"^([A-Z0-9]{3})\s+(.*)$")
 
           for line in lines[1:]:
@@ -158,9 +152,11 @@ jobs:
               rows[key] = re.split(r"\s+", rest)
 
           if not rows:
-              raise SystemExit("ERROR: No parseable rows found inside KNEW block.")
+              raise SystemExit("ERROR: No parseable rows found inside NEWC block.")
 
           def clean_token(tok):
+              if tok is None:
+                  return None
               tok = tok.strip()
               if tok in {"", "-99", "MM", "/", "//", "///"}:
                   return None
@@ -178,7 +174,6 @@ jobs:
                   except Exception:
                       return None
 
-          # Prefer FHR if present. If not, fall back to 1..N
           ncols = 0
           for key in ("FHR", "UTC", "WDR", "WSP", "GST"):
               ncols = max(ncols, len(rows.get(key, [])))
@@ -234,7 +229,6 @@ jobs:
                       wdr_code = None
                   else:
                       wdr_code = int(wdr_num)
-                      # NBM WDR is nearest tens degrees, with north = 36
                       if 0 <= wdr_code <= 36:
                           wind_dir_deg = 360 if wdr_code == 36 else wdr_code * 10
                       else:
