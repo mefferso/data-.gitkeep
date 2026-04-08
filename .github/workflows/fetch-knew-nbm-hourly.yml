@@ -80,8 +80,8 @@ jobs:
           head -40 "$NBM_FILE" || true
 
           echo
-          echo "Searching for KNEW in bulletin:"
-          grep -n "KNEW" "$NBM_FILE" | head -20 || true
+          echo "Searching for NEW in bulletin:"
+          grep -n "NEW" "$NBM_FILE" | head -20 || true
 
       - name: Extract KNEW station block and write parsed hourly CSV
         shell: bash
@@ -96,7 +96,7 @@ jobs:
           from pathlib import Path
           from datetime import datetime, timedelta, timezone
 
-          station = "KNEW"
+          station = "NEW"
 
           nbm_file = Path(os.environ["NBM_FILE"])
           cycle_date = os.environ["NBM_CYCLE_DATE"]
