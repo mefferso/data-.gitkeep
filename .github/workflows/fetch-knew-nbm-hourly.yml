@@ -79,8 +79,8 @@ jobs:
           head -40 "$NBM_FILE" || true
 
           echo
-          echo "Searching for NEWC in bulletin:"
-          grep -nE '(^|[[:space:]])NEWC([[:space:]]|$)' "$NBM_FILE" | head -20 || true
+          echo "Searching for KNEW in bulletin:"
+          grep -nE '(^|[[:space:]])KNEW([[:space:]]|$)' "$NBM_FILE" | head -20 || true
 
       - name: Extract KNEW station block and write parsed hourly CSV
         shell: bash
@@ -95,7 +95,7 @@ jobs:
           from pathlib import Path
           from datetime import datetime, timedelta, timezone
 
-          station = "NEWC"
+          station = "KNEW"
 
           nbm_file = Path(os.environ["NBM_FILE"])
           cycle_date = os.environ["NBM_CYCLE_DATE"]
@@ -127,8 +127,8 @@ jobs:
 
           if not m:
               raise SystemExit(
-                  "ERROR: Could not find NEWC station block in NBM bulletin. "
-                  "Check the action log step 'Preview downloaded bulletin' to see whether NEWC is present."
+                  "ERROR: Could not find KNEW station block in NBM bulletin. "
+                  "Check the action log step 'Preview downloaded bulletin' to see whether KNEW is present."
               )
 
           block = m.group(0).strip() + "\n"
@@ -136,7 +136,7 @@ jobs:
 
           lines = [ln.rstrip("\n") for ln in block.splitlines() if ln.strip()]
           if not lines:
-              raise SystemExit("ERROR: Extracted NEWC block is empty.")
+              raise SystemExit("ERROR: Extracted KNEW block is empty.")
 
           rows = {}
           row_re = re.compile(r"^([A-Z0-9]{3})\s+(.*)$")
@@ -152,7 +152,7 @@ jobs:
               rows[key] = re.split(r"\s+", rest)
 
           if not rows:
-              raise SystemExit("ERROR: No parseable rows found inside NEWC block.")
+              raise SystemExit("ERROR: No parseable rows found inside KNEW block.")
 
           def clean_token(tok):
               if tok is None:
