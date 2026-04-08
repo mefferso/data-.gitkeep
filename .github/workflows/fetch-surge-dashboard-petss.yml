@@ -1,0 +1,256 @@
+name: Fetch Surge Dashboard PETSS
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Prepare folders
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p downloads extracted data/surge_dashboard
+
+      - name: Download latest PETSS archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -f downloads/*
+          rm -rf extracted/*
+          mkdir -p extracted
+          mkdir -p data/surge_dashboard
+
+          FOUND=""
+          FOUND_URL=""
+          CYCLE_DATE=""
+          CYCLE_HOUR=""
+
+          TODAY=$(date -u +%Y%m%d)
+          YDAY=$(date -u -d "yesterday" +%Y%m%d)
+
+          for DATE in "$TODAY" "$YDAY"; do
+            for HH in 18 12 06 00; do
+              FILE="petss.t${HH}z.gefs_csv.tar.gz"
+              URL="https://nomads.ncep.noaa.gov/pub/data/nccf/com/petss/prod/petss.${DATE}/${FILE}"
+
+              echo "Trying $URL"
+
+              if curl -f -L --retry 3 --retry-delay 5 --connect-timeout 30 "$URL" -o "downloads/$FILE"; then
+                echo "Downloaded $FILE"
+                FOUND="downloads/$FILE"
+                FOUND_URL="$URL"
+                CYCLE_DATE="$DATE"
+                CYCLE_HOUR="$HH"
+                break 2
+              fi
+            done
+          done
+
+          if [ -z "$FOUND" ]; then
+            echo "ERROR: No PETSS archive found for today or yesterday."
+            exit 1
+          fi
+
+          echo "ARCHIVE_PATH=$FOUND" >> "$GITHUB_ENV"
+          echo "PETSS_ARCHIVE_URL=$FOUND_URL" >> "$GITHUB_ENV"
+          echo "PETSS_CYCLE_DATE=$CYCLE_DATE" >> "$GITHUB_ENV"
+          echo "PETSS_CYCLE_HOUR=$CYCLE_HOUR" >> "$GITHUB_ENV"
+
+          echo "Archive path: $FOUND"
+          ls -lh "$FOUND"
+          file "$FOUND"
+
+      - name: Validate archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${ARCHIVE_PATH:-}" ]; then
+            echo "ERROR: ARCHIVE_PATH not set."
+            exit 1
+          fi
+
+          gzip -t "$ARCHIVE_PATH"
+          tar -tzf "$ARCHIVE_PATH" > /tmp/petss_contents.txt
+
+          echo "First 200 archive entries:"
+          head -200 /tmp/petss_contents.txt || true
+
+      - name: Extract archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${ARCHIVE_PATH:-}" ]; then
+            echo "ERROR: ARCHIVE_PATH not set."
+            exit 1
+          fi
+
+          tar -xzf "$ARCHIVE_PATH" -C extracted
+
+          echo "Extracted file count:"
+          find extracted -type f | wc -l
+
+          echo "First 200 extracted files:"
+          find extracted -type f | head -200 || true
+
+      - name: Find New Canal station file and write dashboard files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import csv
+          import json
+          import shutil
+          import subprocess
+          from pathlib import Path
+
+          station_id = "8761927"
+          station_name = "New Canal Station, LA"
+
+          extracted = Path("extracted")
+          out_dir = Path("data/surge_dashboard")
+          out_dir.mkdir(parents=True, exist_ok=True)
+
+          def find_station_file():
+              # First: content match
+              try:
+                  result = subprocess.run(
+                      ["grep", "-Ril", station_id, str(extracted)],
+                      capture_output=True,
+                      text=True,
+                      check=False
+                  )
+                  matches = [line.strip() for line in result.stdout.splitlines() if line.strip()]
+                  if matches:
+                      return Path(matches[0])
+              except Exception:
+                  pass
+
+              # Fallback: filename match
+              for p in extracted.rglob("*"):
+                  if p.is_file() and station_id in p.name:
+                      return p
+
+              return None
+
+          src = find_station_file()
+          if src is None:
+              raise SystemExit(f"ERROR: Could not find station file for {station_id} ({station_name})")
+
+          raw_out = out_dir / "new_canal_petss_raw.txt"
+          clean_out = out_dir / "new_canal_petss_clean.csv"
+          source_info_out = out_dir / "new_canal_source_info.json"
+
+          shutil.copyfile(src, raw_out)
+
+          with src.open("r", newline="") as f_in, clean_out.open("w", newline="") as f_out:
+              sample = f_in.read(4096)
+              f_in.seek(0)
+
+              try:
+                  dialect = csv.Sniffer().sniff(sample, delimiters=",\t ")
+              except Exception:
+                  class SimpleDialect(csv.excel):
+                      delimiter = ","
+                  dialect = SimpleDialect
+
+              reader = csv.reader(f_in, dialect)
+              writer = csv.writer(f_out)
+
+              for row in reader:
+                  cleaned = []
+                  for cell in row:
+                      v = cell.strip()
+                      if v in ("9999.000", "9999"):
+                          cleaned.append("")
+                      else:
+                          cleaned.append(v)
+                  writer.writerow(cleaned)
+
+          source_info = {
+              "station_id": station_id,
+              "station_name": station_name,
+              "source_file_in_archive": str(src),
+              "raw_output_file": str(raw_out),
+              "clean_output_file": str(clean_out)
+          }
+
+          source_info_out.write_text(json.dumps(source_info, indent=2))
+          print(f"Created {raw_out}")
+          print(f"Created {clean_out}")
+          print(f"Created {source_info_out}")
+          PY
+
+      - name: Fetch hi/low tide predictions for New Canal
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          BEGIN_DATE=$(date +%Y%m%d)
+          END_DATE=$(date -d "+5 days" +%Y%m%d)
+
+          TIDE_URL="https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?product=predictions&application=surge_dashboard&begin_date=${BEGIN_DATE}&end_date=${END_DATE}&datum=MLLW&station=8761927&time_zone=lst_ldt&interval=hilo&units=english&format=json"
+
+          echo "Fetching $TIDE_URL"
+
+          curl -f -L --retry 3 --retry-delay 5 --connect-timeout 30 \
+            "$TIDE_URL" \
+            -o data/surge_dashboard/new_canal_hilo.json
+
+          echo "Saved data/surge_dashboard/new_canal_hilo.json"
+
+      - name: Write metadata file
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FETCHED_UTC=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          cat > data/surge_dashboard/latest_metadata.json <<EOF
+          {
+            "fetched_utc": "${FETCHED_UTC}",
+            "petss_cycle_date_utc": "${PETSS_CYCLE_DATE}",
+            "petss_cycle_hour_utc": "${PETSS_CYCLE_HOUR}",
+            "petss_archive_url": "${PETSS_ARCHIVE_URL}",
+            "petss_station_id": "8761927",
+            "petss_station_name": "New Canal Station, LA",
+            "tide_station_id": "8761927",
+            "tide_file": "data/surge_dashboard/new_canal_hilo.json",
+            "petss_raw_file": "data/surge_dashboard/new_canal_petss_raw.txt",
+            "petss_clean_file": "data/surge_dashboard/new_canal_petss_clean.csv"
+          }
+          EOF
+
+          cat data/surge_dashboard/latest_metadata.json
+
+      - name: Commit updated dashboard files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add data/surge_dashboard/*
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Update surge dashboard PETSS inputs"
+          git push
