@@ -1,0 +1,356 @@
+{
+  "generated_utc": "2026-04-08T05:47:04Z",
+  "generated_local": "2026-04-08 00:47 CDT",
+  "station_name": "New Canal Station, LA",
+  "station_id": "8761927",
+  "wind_source_station_label": "KNEW / Lakefront Airport NBM hourly text",
+  "direction_rule": "Northeast through north to northwest",
+  "direction_rule_degrees": {
+    "range_1": [
+      315,
+      360
+    ],
+    "range_2": [
+      0,
+      45
+    ]
+  },
+  "source_files": {
+    "nbm_hourly_csv": "data/surge_dashboard/knew_nbm_hourly.csv",
+    "petss_clean_csv": "data/surge_dashboard/new_canal_petss_clean.csv",
+    "hilo_json": "data/surge_dashboard/new_canal_hilo.json"
+  },
+  "window_count": 5,
+  "windows": [
+    {
+      "window_index": 1,
+      "window_label": "Window 1",
+      "low_tide_time_utc": "2026-04-08T17:03:00Z",
+      "low_tide_time_local": "2026-04-08 12:03 CDT",
+      "low_tide_ft_mllw": 0.097,
+      "high_tide_time_utc": "2026-04-09T05:06:00Z",
+      "high_tide_time_local": "2026-04-09 00:06 CDT",
+      "high_tide_ft_mllw": 0.498,
+      "nbm_points_in_window": 12,
+      "favorable_nbm_points_in_window": 0,
+      "favorable_direction_rule": "Northeast through north to northwest",
+      "favorable_direction_degrees": {
+        "range_1": [
+          315,
+          360
+        ],
+        "range_2": [
+          0,
+          45
+        ]
+      },
+      "ga_kt": null,
+      "gf_kt": null,
+      "gf_logic_note": "No favorable-direction gusts in the low-to-high tide window.",
+      "wind_samples": [
+        {
+          "valid_time_utc": "2026-04-08T18:00:00Z",
+          "valid_time_local": "2026-04-08 13:00 CDT",
+          "wind_dir_deg": 90,
+          "wsp_kt": 17.0,
+          "gst_kt": 24.0,
+          "is_favorable": false
+        },
+        {
+          "valid_time_utc": "2026-04-08T19:00:00Z",
+          "valid_time_local": "2026-04-08 14:00 CDT",
+          "wind_dir_deg": 90,
+          "wsp_kt": 17.0,
+          "gst_kt": 24.0,
+          "is_favorable": false
+        },
+        {
+          "valid_time_utc": "2026-04-08T20:00:00Z",
+          "valid_time_local": "2026-04-08 15:00 CDT",
+          "wind_dir_deg": 90,
+          "wsp_kt": 17.0,
+          "gst_kt": 23.0,
+          "is_favorable": false
+        },
+        {
+          "valid_time_utc": "2026-04-08T21:00:00Z",
+          "valid_time_local": "2026-04-08 16:00 CDT",
+          "wind_dir_deg": 90,
+          "wsp_kt": 17.0,
+          "gst_kt": 23.0,
+          "is_favorable": false
+        },
+        {
+          "valid_time_utc": "2026-04-08T22:00:00Z",
+          "valid_time_local": "2026-04-08 17:00 CDT",
+          "wind_dir_deg": 90,
+          "wsp_kt": 17.0,
+          "gst_kt": 22.0,
+          "is_favorable": false
+        },
+        {
+          "valid_time_utc": "2026-04-08T23:00:00Z",
+          "valid_time_local": "2026-04-08 18:00 CDT",
+          "wind_dir_deg": 90,
+          "wsp_kt": 16.0,
+          "gst_kt": 21.0,
+          "is_favorable": false
+        },
+        {
+          "valid_time_utc": "2026-04-09T00:00:00Z",
+          "valid_time_local": "2026-04-08 19:00 CDT",
+          "wind_dir_deg": 100,
+          "wsp_kt": 15.0,
+          "gst_kt": 19.0,
+          "is_favorable": false
+        },
+        {
+          "valid_time_utc": "2026-04-09T01:00:00Z",
+          "valid_time_local": "2026-04-08 20:00 CDT",
+          "wind_dir_deg": 100,
+          "wsp_kt": 15.0,
+          "gst_kt": 19.0,
+          "is_favorable": false
+        },
+        {
+          "valid_time_utc": "2026-04-09T02:00:00Z",
+          "valid_time_local": "2026-04-08 21:00 CDT",
+          "wind_dir_deg": 100,
+          "wsp_kt": 15.0,
+          "gst_kt": 19.0,
+          "is_favorable": false
+        },
+        {
+          "valid_time_utc": "2026-04-09T03:00:00Z",
+          "valid_time_local": "2026-04-08 22:00 CDT",
+          "wind_dir_deg": 100,
+          "wsp_kt": 15.0,
+          "gst_kt": 18.0,
+          "is_favorable": false
+        },
+        {
+          "valid_time_utc": "2026-04-09T04:00:00Z",
+          "valid_time_local": "2026-04-08 23:00 CDT",
+          "wind_dir_deg": 100,
+          "wsp_kt": 15.0,
+          "gst_kt": 19.0,
+          "is_favorable": false
+        },
+        {
+          "valid_time_utc": "2026-04-09T05:00:00Z",
+          "valid_time_local": "2026-04-09 00:00 CDT",
+          "wind_dir_deg": 100,
+          "wsp_kt": 15.0,
+          "gst_kt": 19.0,
+          "is_favorable": false
+        }
+      ],
+      "petss_points_in_window": 121,
+      "petss_max_twl_ft": 1.605,
+      "petss_max_twl_time_utc": "2026-04-09T05:00:00Z",
+      "petss_max_twl_time_local": "2026-04-09 00:00 CDT",
+      "petss_max_surge_ft": 0.6,
+      "petss_max_surge_time_utc": "2026-04-09T01:00:00Z",
+      "petss_max_surge_time_local": "2026-04-08 20:00 CDT",
+      "petss_max_twl10p_ft": 1.605,
+      "petss_max_twl10p_time_utc": "2026-04-09T05:00:00Z",
+      "petss_max_twl90p_ft": 1.605,
+      "petss_max_twl90p_time_utc": "2026-04-09T05:00:00Z",
+      "petss_max_surge10p_ft": 0.6,
+      "petss_max_surge10p_time_utc": "2026-04-08T20:00:00Z",
+      "petss_max_surge90p_ft": 0.6,
+      "petss_max_surge90p_time_utc": "2026-04-09T03:00:00Z",
+      "signal_score": 1,
+      "signal": "Minimal",
+      "signal_reasons": [
+        "PETSS max surge 0.60 ft"
+      ]
+    },
+    {
+      "window_index": 2,
+      "window_label": "Window 2",
+      "low_tide_time_utc": "2026-04-09T17:44:00Z",
+      "low_tide_time_local": "2026-04-09 12:44 CDT",
+      "low_tide_ft_mllw": 0.098,
+      "high_tide_time_utc": "2026-04-10T06:46:00Z",
+      "high_tide_time_local": "2026-04-10 01:46 CDT",
+      "high_tide_ft_mllw": 0.501,
+      "nbm_points_in_window": 0,
+      "favorable_nbm_points_in_window": 0,
+      "favorable_direction_rule": "Northeast through north to northwest",
+      "favorable_direction_degrees": {
+        "range_1": [
+          315,
+          360
+        ],
+        "range_2": [
+          0,
+          45
+        ]
+      },
+      "ga_kt": null,
+      "gf_kt": null,
+      "gf_logic_note": "No favorable-direction gusts in the low-to-high tide window.",
+      "wind_samples": [],
+      "petss_points_in_window": 130,
+      "petss_max_twl_ft": 1.707,
+      "petss_max_twl_time_utc": "2026-04-10T06:00:00Z",
+      "petss_max_twl_time_local": "2026-04-10 01:00 CDT",
+      "petss_max_surge_ft": 0.7,
+      "petss_max_surge_time_utc": "2026-04-09T18:00:00Z",
+      "petss_max_surge_time_local": "2026-04-09 13:00 CDT",
+      "petss_max_twl10p_ft": 1.807,
+      "petss_max_twl10p_time_utc": "2026-04-10T06:00:00Z",
+      "petss_max_twl90p_ft": 1.707,
+      "petss_max_twl90p_time_utc": "2026-04-10T06:00:00Z",
+      "petss_max_surge10p_ft": 0.8,
+      "petss_max_surge10p_time_utc": "2026-04-09T18:00:00Z",
+      "petss_max_surge90p_ft": 0.7,
+      "petss_max_surge90p_time_utc": "2026-04-09T22:00:00Z",
+      "signal_score": 1,
+      "signal": "Minimal",
+      "signal_reasons": [
+        "PETSS max surge 0.70 ft"
+      ]
+    },
+    {
+      "window_index": 3,
+      "window_label": "Window 3",
+      "low_tide_time_utc": "2026-04-10T18:17:00Z",
+      "low_tide_time_local": "2026-04-10 13:17 CDT",
+      "low_tide_ft_mllw": 0.105,
+      "high_tide_time_utc": "2026-04-11T08:01:00Z",
+      "high_tide_time_local": "2026-04-11 03:01 CDT",
+      "high_tide_ft_mllw": 0.507,
+      "nbm_points_in_window": 0,
+      "favorable_nbm_points_in_window": 0,
+      "favorable_direction_rule": "Northeast through north to northwest",
+      "favorable_direction_degrees": {
+        "range_1": [
+          315,
+          360
+        ],
+        "range_2": [
+          0,
+          45
+        ]
+      },
+      "ga_kt": null,
+      "gf_kt": null,
+      "gf_logic_note": "No favorable-direction gusts in the low-to-high tide window.",
+      "wind_samples": [],
+      "petss_points_in_window": 138,
+      "petss_max_twl_ft": 1.815,
+      "petss_max_twl_time_utc": "2026-04-11T08:00:00Z",
+      "petss_max_twl_time_local": "2026-04-11 03:00 CDT",
+      "petss_max_surge_ft": 0.8,
+      "petss_max_surge_time_utc": "2026-04-10T19:00:00Z",
+      "petss_max_surge_time_local": "2026-04-10 14:00 CDT",
+      "petss_max_twl10p_ft": 1.915,
+      "petss_max_twl10p_time_utc": "2026-04-11T08:00:00Z",
+      "petss_max_twl90p_ft": 1.815,
+      "petss_max_twl90p_time_utc": "2026-04-11T08:00:00Z",
+      "petss_max_surge10p_ft": 0.9,
+      "petss_max_surge10p_time_utc": "2026-04-10T19:00:00Z",
+      "petss_max_surge90p_ft": 0.8,
+      "petss_max_surge90p_time_utc": "2026-04-10T23:00:00Z",
+      "signal_score": 2,
+      "signal": "Low",
+      "signal_reasons": [
+        "PETSS max surge 0.80 ft"
+      ]
+    },
+    {
+      "window_index": 4,
+      "window_label": "Window 4",
+      "low_tide_time_utc": "2026-04-11T18:43:00Z",
+      "low_tide_time_local": "2026-04-11 13:43 CDT",
+      "low_tide_ft_mllw": 0.126,
+      "high_tide_time_utc": "2026-04-12T08:48:00Z",
+      "high_tide_time_local": "2026-04-12 03:48 CDT",
+      "high_tide_ft_mllw": 0.499,
+      "nbm_points_in_window": 0,
+      "favorable_nbm_points_in_window": 0,
+      "favorable_direction_rule": "Northeast through north to northwest",
+      "favorable_direction_degrees": {
+        "range_1": [
+          315,
+          360
+        ],
+        "range_2": [
+          0,
+          45
+        ]
+      },
+      "ga_kt": null,
+      "gf_kt": null,
+      "gf_logic_note": "No favorable-direction gusts in the low-to-high tide window.",
+      "wind_samples": [],
+      "petss_points_in_window": 53,
+      "petss_max_twl_ft": 1.58,
+      "petss_max_twl_time_utc": "2026-04-12T00:00:00Z",
+      "petss_max_twl_time_local": "2026-04-11 19:00 CDT",
+      "petss_max_surge_ft": 0.8,
+      "petss_max_surge_time_utc": "2026-04-11T19:00:00Z",
+      "petss_max_surge_time_local": "2026-04-11 14:00 CDT",
+      "petss_max_twl10p_ft": 1.68,
+      "petss_max_twl10p_time_utc": "2026-04-12T00:00:00Z",
+      "petss_max_twl90p_ft": 1.58,
+      "petss_max_twl90p_time_utc": "2026-04-12T00:00:00Z",
+      "petss_max_surge10p_ft": 0.9,
+      "petss_max_surge10p_time_utc": "2026-04-11T19:00:00Z",
+      "petss_max_surge90p_ft": 0.8,
+      "petss_max_surge90p_time_utc": "2026-04-11T19:00:00Z",
+      "signal_score": 2,
+      "signal": "Low",
+      "signal_reasons": [
+        "PETSS max surge 0.80 ft"
+      ]
+    },
+    {
+      "window_index": 5,
+      "window_label": "Window 5",
+      "low_tide_time_utc": "2026-04-12T19:01:00Z",
+      "low_tide_time_local": "2026-04-12 14:01 CDT",
+      "low_tide_ft_mllw": 0.164,
+      "high_tide_time_utc": "2026-04-13T09:27:00Z",
+      "high_tide_time_local": "2026-04-13 04:27 CDT",
+      "high_tide_ft_mllw": 0.468,
+      "nbm_points_in_window": 0,
+      "favorable_nbm_points_in_window": 0,
+      "favorable_direction_rule": "Northeast through north to northwest",
+      "favorable_direction_degrees": {
+        "range_1": [
+          315,
+          360
+        ],
+        "range_2": [
+          0,
+          45
+        ]
+      },
+      "ga_kt": null,
+      "gf_kt": null,
+      "gf_logic_note": "No favorable-direction gusts in the low-to-high tide window.",
+      "wind_samples": [],
+      "petss_points_in_window": 0,
+      "petss_max_twl_ft": null,
+      "petss_max_twl_time_utc": null,
+      "petss_max_twl_time_local": null,
+      "petss_max_surge_ft": null,
+      "petss_max_surge_time_utc": null,
+      "petss_max_surge_time_local": null,
+      "petss_max_twl10p_ft": null,
+      "petss_max_twl10p_time_utc": null,
+      "petss_max_twl90p_ft": null,
+      "petss_max_twl90p_time_utc": null,
+      "petss_max_surge10p_ft": null,
+      "petss_max_surge10p_time_utc": null,
+      "petss_max_surge90p_ft": null,
+      "petss_max_surge90p_time_utc": null,
+      "signal_score": 0,
+      "signal": "Minimal",
+      "signal_reasons": []
+    }
+  ]
+}
