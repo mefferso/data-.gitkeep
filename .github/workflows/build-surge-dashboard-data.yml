@@ -1,0 +1,487 @@
+name: Build Surge Dashboard Data
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Verify required input files exist
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          REQUIRED_FILES=(
+            "data/surge_dashboard/knew_nbm_hourly.csv"
+            "data/surge_dashboard/new_canal_petss_clean.csv"
+            "data/surge_dashboard/new_canal_hilo.json"
+          )
+
+          for f in "${REQUIRED_FILES[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "ERROR: Missing required input file: $f"
+              exit 1
+            fi
+          done
+
+          mkdir -p data/surge_dashboard
+
+      - name: Build merged surge dashboard JSON
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          import csv
+          import json
+          from pathlib import Path
+          from datetime import datetime, timedelta, timezone
+          from zoneinfo import ZoneInfo
+
+          OUT_DIR = Path("data/surge_dashboard")
+          NBM_FILE = OUT_DIR / "knew_nbm_hourly.csv"
+          PETSS_FILE = OUT_DIR / "new_canal_petss_clean.csv"
+          HILO_FILE = OUT_DIR / "new_canal_hilo.json"
+
+          DASHBOARD_FILE = OUT_DIR / "dashboard_data.json"
+          STATUS_FILE = OUT_DIR / "dashboard_status.json"
+
+          LOCAL_TZ = ZoneInfo("America/Chicago")
+          NOW_UTC = datetime.now(timezone.utc)
+
+          FAVORABLE_DIR_NOTE = "Northeast through north to northwest"
+          FAVORABLE_MIN_1 = 315
+          FAVORABLE_MAX_1 = 360
+          FAVORABLE_MIN_2 = 0
+          FAVORABLE_MAX_2 = 45
+
+          def fmt_utc(dt):
+              return dt.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+          def fmt_local(dt):
+              return dt.astimezone(LOCAL_TZ).strftime("%Y-%m-%d %H:%M %Z")
+
+          def round_or_none(v, ndigits=1):
+              return None if v is None else round(v, ndigits)
+
+          def parse_iso_utc(s):
+              return datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+          def parse_local_hilo_time(s):
+              s = s.strip()
+              for fmt in ("%Y-%m-%d %H:%M", "%Y-%m-%d %H:%M:%S"):
+                  try:
+                      dt_local = datetime.strptime(s, fmt).replace(tzinfo=LOCAL_TZ)
+                      return dt_local.astimezone(timezone.utc)
+                  except ValueError:
+                      pass
+              raise ValueError(f"Could not parse hilo time: {s}")
+
+          def parse_petss_time(s):
+              s = str(s).strip()
+              for fmt in ("%Y%m%d%H%M", "%Y%m%d%H"):
+                  try:
+                      return datetime.strptime(s, fmt).replace(tzinfo=timezone.utc)
+                  except ValueError:
+                      pass
+              raise ValueError(f"Could not parse PETSS time: {s}")
+
+          def to_float(value):
+              if value is None:
+                  return None
+              s = str(value).strip()
+              if s == "":
+                  return None
+              try:
+                  return float(s)
+              except Exception:
+                  return None
+
+          def to_int(value):
+              if value is None:
+                  return None
+              s = str(value).strip()
+              if s == "":
+                  return None
+              try:
+                  return int(float(s))
+              except Exception:
+                  return None
+
+          def is_favorable_dir(deg):
+              if deg is None:
+                  return False
+              return (FAVORABLE_MIN_1 <= deg <= FAVORABLE_MAX_1) or (FAVORABLE_MIN_2 <= deg <= FAVORABLE_MAX_2)
+
+          def choose_effective_peak_gust(gusts):
+              if not gusts:
+                  return None, "No favorable-direction gusts in the low-to-high tide window."
+
+              gusts = sorted([g for g in gusts if g is not None], reverse=True)
+              if not gusts:
+                  return None, "No favorable-direction gusts in the low-to-high tide window."
+
+              if len(gusts) == 1:
+                  return gusts[0], f"Only one favorable gust available ({gusts[0]} kt)."
+
+              top = gusts[0]
+              second = gusts[1]
+
+              near_top = [g for g in gusts if (top - g) <= 3]
+              if len(near_top) >= 2:
+                  return top, f"Used max gust {top} kt; {len(near_top)} gusts were within 3 kt of the top value."
+
+              if (top - second) >= 6:
+                  return second, f"Top gust {top} kt looked like a stray spike; used 2nd-highest gust {second} kt."
+
+              return top, f"Used max gust {top} kt."
+
+          def max_value(rows, field):
+              vals = []
+              for r in rows:
+                  v = r.get(field)
+                  if v is not None:
+                      vals.append((r["time_utc"], v))
+              if not vals:
+                  return None, None
+              t, v = max(vals, key=lambda x: x[1])
+              return v, t
+
+          def score_window(ga, gf, favorable_count, petss_max_surge):
+              score = 0
+              reasons = []
+
+              if favorable_count >= 2:
+                  score += 1
+                  reasons.append(f"{favorable_count} favorable hourly points in the window")
+
+              if ga is not None:
+                  if ga >= 30:
+                      score += 3
+                      reasons.append(f"Ga {ga:.1f} kt")
+                  elif ga >= 25:
+                      score += 2
+                      reasons.append(f"Ga {ga:.1f} kt")
+                  elif ga >= 20:
+                      score += 1
+                      reasons.append(f"Ga {ga:.1f} kt")
+
+              if gf is not None:
+                  if gf >= 35:
+                      score += 3
+                      reasons.append(f"Gf {gf:.0f} kt")
+                  elif gf >= 30:
+                      score += 2
+                      reasons.append(f"Gf {gf:.0f} kt")
+                  elif gf >= 25:
+                      score += 1
+                      reasons.append(f"Gf {gf:.0f} kt")
+
+              if petss_max_surge is not None:
+                  if petss_max_surge >= 0.8:
+                      score += 2
+                      reasons.append(f"PETSS max surge {petss_max_surge:.2f} ft")
+                  elif petss_max_surge >= 0.4:
+                      score += 1
+                      reasons.append(f"PETSS max surge {petss_max_surge:.2f} ft")
+
+              if score >= 8:
+                  signal = "Very High"
+              elif score >= 6:
+                  signal = "High"
+              elif score >= 4:
+                  signal = "Moderate"
+              elif score >= 2:
+                  signal = "Low"
+              else:
+                  signal = "Minimal"
+
+              return score, signal, reasons
+
+          nbm_rows = []
+          with NBM_FILE.open("r", newline="") as f:
+              reader = csv.DictReader(f)
+              for row in reader:
+                  try:
+                      valid_time_utc = parse_iso_utc(row["valid_time_utc"])
+                  except Exception:
+                      continue
+
+                  nbm_rows.append({
+                      "valid_time_utc": valid_time_utc,
+                      "forecast_hour": to_int(row.get("forecast_hour")),
+                      "utc_token": row.get("utc_token", ""),
+                      "wdr_code": to_int(row.get("wdr_code")),
+                      "wind_dir_deg": to_int(row.get("wind_dir_deg")),
+                      "wsp_kt": to_float(row.get("wsp_kt")),
+                      "gst_kt": to_float(row.get("gst_kt")),
+                  })
+
+          nbm_rows.sort(key=lambda r: r["valid_time_utc"])
+
+          petss_rows = []
+          with PETSS_FILE.open("r", newline="") as f:
+              reader = csv.DictReader(f)
+              for row in reader:
+                  raw_time = row.get("TIME")
+                  if not raw_time:
+                      continue
+                  try:
+                      t_utc = parse_petss_time(raw_time)
+                  except Exception:
+                      continue
+
+                  petss_rows.append({
+                      "time_utc": t_utc,
+                      "TIDE": to_float(row.get("TIDE")),
+                      "OB": to_float(row.get("OB")),
+                      "SURGE": to_float(row.get("SURGE")),
+                      "BIAS": to_float(row.get("BIAS")),
+                      "TWL": to_float(row.get("TWL")),
+                      "SURGE90p": to_float(row.get("SURGE90p")),
+                      "TWL90p": to_float(row.get("TWL90p")),
+                      "SURGE10p": to_float(row.get("SURGE10p")),
+                      "TWL10p": to_float(row.get("TWL10p")),
+                  })
+
+          petss_rows.sort(key=lambda r: r["time_utc"])
+
+          hilo_payload = json.loads(HILO_FILE.read_text())
+          predictions = hilo_payload.get("predictions", [])
+          if not predictions:
+              raise SystemExit("ERROR: new_canal_hilo.json did not contain a 'predictions' array.")
+
+          hilo_rows = []
+          for p in predictions:
+              if "t" not in p or "type" not in p:
+                  continue
+              try:
+                  t_utc = parse_local_hilo_time(p["t"])
+              except Exception:
+                  continue
+
+              hilo_rows.append({
+                  "time_utc": t_utc,
+                  "time_local": fmt_local(t_utc),
+                  "type": str(p.get("type", "")).strip().upper(),
+                  "value_ft": to_float(p.get("v")),
+              })
+
+          hilo_rows.sort(key=lambda r: r["time_utc"])
+
+          raw_windows = []
+          for i, tide in enumerate(hilo_rows):
+              if tide["type"] != "L":
+                  continue
+
+              next_high = None
+              for j in range(i + 1, len(hilo_rows)):
+                  if hilo_rows[j]["type"] == "H" and hilo_rows[j]["time_utc"] > tide["time_utc"]:
+                      next_high = hilo_rows[j]
+                      break
+
+              if next_high is None:
+                  continue
+
+              if (next_high["time_utc"] - tide["time_utc"]) > timedelta(hours=18):
+                  continue
+
+              raw_windows.append({
+                  "low": tide,
+                  "high": next_high,
+              })
+
+          raw_windows = [
+              w for w in raw_windows
+              if w["high"]["time_utc"] >= (NOW_UTC - timedelta(hours=1))
+          ][:8]
+
+          windows = []
+          for idx, w in enumerate(raw_windows, start=1):
+              low_t = w["low"]["time_utc"]
+              high_t = w["high"]["time_utc"]
+
+              nbm_all = [r for r in nbm_rows if low_t <= r["valid_time_utc"] <= high_t]
+              nbm_fav = [
+                  r for r in nbm_all
+                  if is_favorable_dir(r.get("wind_dir_deg")) and r.get("gst_kt") is not None
+              ]
+
+              gusts = [r["gst_kt"] for r in nbm_fav if r.get("gst_kt") is not None]
+              ga = round(sum(gusts) / len(gusts), 1) if gusts else None
+              gf, gf_note = choose_effective_peak_gust(gusts)
+
+              petss_win = [r for r in petss_rows if low_t <= r["time_utc"] <= high_t]
+
+              petss_max_twl, petss_max_twl_time = max_value(petss_win, "TWL")
+              petss_max_surge, petss_max_surge_time = max_value(petss_win, "SURGE")
+              petss_max_twl10, petss_max_twl10_time = max_value(petss_win, "TWL10p")
+              petss_max_twl90, petss_max_twl90_time = max_value(petss_win, "TWL90p")
+              petss_max_surge10, petss_max_surge10_time = max_value(petss_win, "SURGE10p")
+              petss_max_surge90, petss_max_surge90_time = max_value(petss_win, "SURGE90p")
+
+              score, signal, reasons = score_window(
+                  ga=ga,
+                  gf=gf,
+                  favorable_count=len(nbm_fav),
+                  petss_max_surge=petss_max_surge,
+              )
+
+              windows.append({
+                  "window_index": idx,
+                  "window_label": f"Window {idx}",
+                  "low_tide_time_utc": fmt_utc(low_t),
+                  "low_tide_time_local": fmt_local(low_t),
+                  "low_tide_ft_mllw": round_or_none(w["low"]["value_ft"], 3),
+                  "high_tide_time_utc": fmt_utc(high_t),
+                  "high_tide_time_local": fmt_local(high_t),
+                  "high_tide_ft_mllw": round_or_none(w["high"]["value_ft"], 3),
+
+                  "nbm_points_in_window": len(nbm_all),
+                  "favorable_nbm_points_in_window": len(nbm_fav),
+                  "favorable_direction_rule": FAVORABLE_DIR_NOTE,
+                  "favorable_direction_degrees": {
+                      "range_1": [FAVORABLE_MIN_1, FAVORABLE_MAX_1],
+                      "range_2": [FAVORABLE_MIN_2, FAVORABLE_MAX_2],
+                  },
+
+                  "ga_kt": round_or_none(ga, 1),
+                  "gf_kt": round_or_none(gf, 0),
+                  "gf_logic_note": gf_note,
+
+                  "wind_samples": [
+                      {
+                          "valid_time_utc": fmt_utc(r["valid_time_utc"]),
+                          "valid_time_local": fmt_local(r["valid_time_utc"]),
+                          "wind_dir_deg": r.get("wind_dir_deg"),
+                          "wsp_kt": round_or_none(r.get("wsp_kt"), 1),
+                          "gst_kt": round_or_none(r.get("gst_kt"), 1),
+                          "is_favorable": is_favorable_dir(r.get("wind_dir_deg")),
+                      }
+                      for r in nbm_all
+                  ],
+
+                  "petss_points_in_window": len(petss_win),
+                  "petss_max_twl_ft": round_or_none(petss_max_twl, 3),
+                  "petss_max_twl_time_utc": fmt_utc(petss_max_twl_time) if petss_max_twl_time else None,
+                  "petss_max_twl_time_local": fmt_local(petss_max_twl_time) if petss_max_twl_time else None,
+
+                  "petss_max_surge_ft": round_or_none(petss_max_surge, 3),
+                  "petss_max_surge_time_utc": fmt_utc(petss_max_surge_time) if petss_max_surge_time else None,
+                  "petss_max_surge_time_local": fmt_local(petss_max_surge_time) if petss_max_surge_time else None,
+
+                  "petss_max_twl10p_ft": round_or_none(petss_max_twl10, 3),
+                  "petss_max_twl10p_time_utc": fmt_utc(petss_max_twl10_time) if petss_max_twl10_time else None,
+                  "petss_max_twl90p_ft": round_or_none(petss_max_twl90, 3),
+                  "petss_max_twl90p_time_utc": fmt_utc(petss_max_twl90_time) if petss_max_twl90_time else None,
+
+                  "petss_max_surge10p_ft": round_or_none(petss_max_surge10, 3),
+                  "petss_max_surge10p_time_utc": fmt_utc(petss_max_surge10_time) if petss_max_surge10_time else None,
+                  "petss_max_surge90p_ft": round_or_none(petss_max_surge90, 3),
+                  "petss_max_surge90p_time_utc": fmt_utc(petss_max_surge90_time) if petss_max_surge90_time else None,
+
+                  "signal_score": score,
+                  "signal": signal,
+                  "signal_reasons": reasons,
+              })
+
+          active_window = None
+          next_window = None
+
+          for w in windows:
+              low_t = parse_iso_utc(w["low_tide_time_utc"])
+              high_t = parse_iso_utc(w["high_tide_time_utc"])
+
+              if low_t <= NOW_UTC <= high_t and active_window is None:
+                  active_window = w
+
+              if high_t >= NOW_UTC and next_window is None:
+                  next_window = w
+
+          dashboard_data = {
+              "generated_utc": fmt_utc(NOW_UTC),
+              "generated_local": fmt_local(NOW_UTC),
+              "station_name": "New Canal Station, LA",
+              "station_id": "8761927",
+              "wind_source_station_label": "KNEW / Lakefront Airport NBM hourly text",
+              "direction_rule": FAVORABLE_DIR_NOTE,
+              "direction_rule_degrees": {
+                  "range_1": [FAVORABLE_MIN_1, FAVORABLE_MAX_1],
+                  "range_2": [FAVORABLE_MIN_2, FAVORABLE_MAX_2],
+              },
+              "source_files": {
+                  "nbm_hourly_csv": str(NBM_FILE),
+                  "petss_clean_csv": str(PETSS_FILE),
+                  "hilo_json": str(HILO_FILE),
+              },
+              "window_count": len(windows),
+              "windows": windows,
+          }
+
+          dashboard_status = {
+              "generated_utc": fmt_utc(NOW_UTC),
+              "generated_local": fmt_local(NOW_UTC),
+              "active_window": active_window,
+              "next_window": next_window,
+              "window_count": len(windows),
+              "headline": (
+                  f"Active window: {active_window['signal']}"
+                  if active_window else
+                  (f"Next window: {next_window['signal']}" if next_window else "No current or upcoming windows available.")
+              )
+          }
+
+          DASHBOARD_FILE.write_text(json.dumps(dashboard_data, indent=2))
+          STATUS_FILE.write_text(json.dumps(dashboard_status, indent=2))
+
+          print(f"Created {DASHBOARD_FILE}")
+          print(f"Created {STATUS_FILE}")
+          print(f"Window count: {len(windows)}")
+          if active_window:
+              print(f"Active window signal: {active_window['signal']}")
+          elif next_window:
+              print(f"Next window signal: {next_window['signal']}")
+          else:
+              print("No active or upcoming windows in output.")
+          PY
+
+      - name: Show output preview
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo "dashboard_status.json"
+          cat data/surge_dashboard/dashboard_status.json
+
+          echo
+          echo "First 120 lines of dashboard_data.json"
+          head -120 data/surge_dashboard/dashboard_data.json || true
+
+      - name: Commit updated dashboard files
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add data/surge_dashboard/dashboard_data.json
+          git add data/surge_dashboard/dashboard_status.json
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Build surge dashboard data"
+          git push
