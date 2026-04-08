@@ -96,7 +96,7 @@ jobs:
           from pathlib import Path
           from datetime import datetime, timedelta, timezone
 
-          station = "NEW"
+          station = "NEWC"
 
           nbm_file = Path(os.environ["NBM_FILE"])
           cycle_date = os.environ["NBM_CYCLE_DATE"]
@@ -113,19 +113,18 @@ jobs:
 
           text = nbm_file.read_text(errors="replace")
 
-          # Standard block match: start at "KNEW NBH ..." and stop before next station block
-          pattern = re.compile(
-              rf"(?ms)^{station}\s+NBH[^\n]*\n.*?(?=^[A-Z0-9]{{3,5}}\s+NBH\b|\Z)"
+          # Match a station block whose header line contains the station code and "NBH"
+            pattern = re.compile(
+                rf"(?ms)^{station}\b[^\n]*NBH[^\n]*\n.*?(?=^[A-Z0-9]{{3,5}}\b[^\n]*NBH\b|\Z)"
           )
           m = pattern.search(text)
 
-          # Slightly more permissive fallback if the heading is formatted a little differently
+          # More permissive fallback
           if not m:
               fallback = re.compile(
-                  rf"(?ms)^{station}\b.*?(?=^[A-Z0-9]{{3,5}}\s+NBH\b|\Z)"
-              )
+                  rf"(?ms)^{station}\b.*?(?=^[A-Z0-9]{{3,5}}\b[^\n]*NBH\b|\Z)"
+               )
               m = fallback.search(text)
-
           if not m:
               raise SystemExit(
                   "ERROR: Could not find KNEW station block in NBM bulletin. "
