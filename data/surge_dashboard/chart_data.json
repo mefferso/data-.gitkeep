@@ -1,6 +1,6 @@
 {
-  "generated_utc": "2026-04-10T23:01:49Z",
-  "generated_local": "2026-04-10 18:01 CDT",
+  "generated_utc": "2026-04-10T23:57:31Z",
+  "generated_local": "2026-04-10 18:57 CDT",
   "station_name": "New Canal Station, LA",
   "station_id": "8761927",
   "wind_source_station_label": "KNEW / Lakefront Airport NBM hourly text",
@@ -24,8 +24,8 @@
     "max_twl_time_utc": "2026-04-12T09:00:00Z",
     "max_twl_time_local": "2026-04-12 04:00 CDT",
     "max_gust_kt": 17.0,
-    "max_gust_time_utc": "2026-04-10T21:00:00Z",
-    "max_gust_time_local": "2026-04-10 16:00 CDT",
+    "max_gust_time_utc": "2026-04-11T18:00:00Z",
+    "max_gust_time_local": "2026-04-11 13:00 CDT",
     "next_high_tide": {
       "time_utc": "2026-04-11T08:01:00Z",
       "time_local": "2026-04-11 03:01 CDT",
@@ -44,8 +44,8 @@
     "petss_clean_csv": "data/surge_dashboard/new_canal_petss_clean.csv",
     "hilo_json": "data/surge_dashboard/new_canal_hilo.json"
   },
-  "now_utc": "2026-04-10T23:01:49Z",
-  "now_local": "2026-04-10 18:01 CDT",
+  "now_utc": "2026-04-10T23:57:31Z",
+  "now_local": "2026-04-10 18:57 CDT",
   "series_count": 91,
   "series": [
     {
@@ -128,9 +128,9 @@
       "twl90_ft": 1.551,
       "obs_ft": null,
       "bias_ft": 0.687,
-      "wind_dir_deg": 110,
-      "wind_speed_kt": 14.0,
-      "wind_gust_kt": 17.0,
+      "wind_dir_deg": null,
+      "wind_speed_kt": null,
+      "wind_gust_kt": null,
       "is_favorable_wind": false
     },
     {
@@ -146,8 +146,8 @@
       "obs_ft": null,
       "bias_ft": 0.68,
       "wind_dir_deg": 110,
-      "wind_speed_kt": 14.0,
-      "wind_gust_kt": 17.0,
+      "wind_speed_kt": 13.0,
+      "wind_gust_kt": 15.0,
       "is_favorable_wind": false
     },
     {
@@ -230,7 +230,7 @@
       "twl90_ft": 1.747,
       "obs_ft": null,
       "bias_ft": 0.644,
-      "wind_dir_deg": 120,
+      "wind_dir_deg": 110,
       "wind_speed_kt": 8.0,
       "wind_gust_kt": 8.0,
       "is_favorable_wind": false
@@ -571,8 +571,8 @@
       "obs_ft": null,
       "bias_ft": 0.622,
       "wind_dir_deg": 110,
-      "wind_speed_kt": 13.0,
-      "wind_gust_kt": 16.0,
+      "wind_speed_kt": 12.0,
+      "wind_gust_kt": 15.0,
       "is_favorable_wind": false
     },
     {
@@ -587,9 +587,9 @@
       "twl90_ft": 1.588,
       "obs_ft": null,
       "bias_ft": 0.622,
-      "wind_dir_deg": null,
-      "wind_speed_kt": null,
-      "wind_gust_kt": null,
+      "wind_dir_deg": 110,
+      "wind_speed_kt": 12.0,
+      "wind_gust_kt": 15.0,
       "is_favorable_wind": false
     },
     {
