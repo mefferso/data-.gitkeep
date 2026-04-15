@@ -8,7 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
   <style>
-    :root { 
+    :root {
       --bg: #eef3f8;
       --card: #ffffff;
       --text: #15202b;
@@ -86,35 +86,8 @@
       color: var(--text);
       outline: none;
     }
-    .control-group-toggle {
-      display: flex;
-      align-items: end;
-    }
-    
-    .toggle-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      min-height: 45px;
-      padding: 0 14px;
-      border: 1px solid #bcc9d6;
-      border-radius: 12px;
-      background: #fff;
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text);
-      cursor: pointer;
-      user-select: none;
-    }
-    
-    .toggle-chip input[type="checkbox"] {
-      margin: 0;
-      width: 16px;
-      height: 16px;
-      accent-color: var(--accent);
-      cursor: pointer;
-    }
-        .control-group select:focus {
+
+    .control-group select:focus {
       border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(31, 119, 180, 0.12);
     }
@@ -136,27 +109,41 @@
       background-color: #155a8a;
     }
 
-    .check-wrap {
+    .control-group-toggle {
+      display: flex;
+      align-items: end;
+      min-width: auto;
+    }
+
+    .toggle-chip {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      height: 45px;
-      padding: 0 12px;
+      gap: 10px;
+      min-height: 45px;
+      padding: 0 14px;
       border: 1px solid #bcc9d6;
       border-radius: 12px;
       background: #fff;
       font-size: 14px;
       font-weight: 600;
-      color: #2a3a49;
+      color: var(--text);
       cursor: pointer;
       user-select: none;
+      margin-bottom: 0;
+      text-transform: none !important;
+      letter-spacing: normal !important;
     }
 
-    .check-wrap input {
+    .toggle-chip input[type="checkbox"] {
+      margin: 0;
       width: 16px;
       height: 16px;
       accent-color: var(--accent);
       cursor: pointer;
+    }
+
+    .toggle-chip span {
+      white-space: nowrap;
     }
 
     .meta {
@@ -221,12 +208,12 @@
             <label for="stationSelect">Select station</label>
             <select id="stationSelect"></select>
           </div>
-        
+
           <div class="control-group" style="min-width: auto;">
             <button id="downloadBtn" class="btn">Download PNG</button>
           </div>
-        
-          <div class="control-group control-group-toggle" style="min-width: auto;">
+
+          <div class="control-group control-group-toggle">
             <label class="toggle-chip">
               <input type="checkbox" id="toggleForecastRange" />
               <span>Show forecast tide range</span>
@@ -302,74 +289,10 @@
     const statusEl = document.getElementById("status");
     const thresholdPill = document.getElementById("thresholdPill");
     const toggleForecastRange = document.getElementById("toggleForecastRange");
-    const toggleForecastRange = document.getElementById("toggleForecastRange");
-    let forecastRangeTraceIndex = null;
-
-    function isStrictLocalExtrema(series, idx, neighborhood, kind) {
-      const curr = series[idx]?.value;
-      if (curr === null || curr === undefined) return false;
-
-      for (let j = 1; j <= neighborhood; j++) {
-        const left = series[idx - j]?.value;
-        const right = series[idx + j]?.value;
-        if (left === null || right === null || left === undefined || right === undefined) return false;
-
-        if (kind === "max") {
-          if (curr <= left || curr <= right) return false;
-        } else if (kind === "min") {
-          if (curr >= left || curr >= right) return false;
-        }
-      }
-      return true;
-    }
-
-    function findForecastExtrema(series, neighborhood = 2) {
-      const maxima = [];
-      const minima = [];
-
-      for (let i = neighborhood; i < series.length - neighborhood; i++) {
-        if (isStrictLocalExtrema(series, i, neighborhood, "max")) maxima.push(series[i]);
-        if (isStrictLocalExtrema(series, i, neighborhood, "min")) minima.push(series[i]);
-      }
-
-      return { maxima, minima };
-    }
-
-    function buildForecastTideRangeSeries(forecastSeries) {
-      const { maxima, minima } = findForecastExtrema(forecastSeries, 2);
-      const cycleRanges = [];
-
-      for (let i = 0; i < maxima.length - 1; i++) {
-        const crestA = maxima[i];
-        const crestB = maxima[i + 1];
-        const troughsBetween = minima.filter(
-          trough => trough.dt > crestA.dt && trough.dt < crestB.dt
-        );
-
-        if (troughsBetween.length === 0) continue;
-
-        const trough = troughsBetween.reduce((lowest, current) =>
-          current.value < lowest.value ? current : lowest
-        );
-
-        const crestAvg = (crestA.value + crestB.value) / 2;
-        const rangeFt = crestAvg - trough.value;
-        if (!Number.isFinite(rangeFt) || rangeFt <= 0) continue;
-
-        cycleRanges.push({
-          dt: crestB.dt,
-          value: rangeFt,
-          cycleStart: crestA.dt,
-          cycleEnd: crestB.dt,
-          troughTime: trough.dt,
-          troughValue: trough.value
-        });
-      }
-
-      return cycleRanges;
-    }
+    const downloadBtn = document.getElementById("downloadBtn");
 
     function populateStationDropdown() {
+      stationSelect.innerHTML = "";
       const stationList = Object.values(STATIONS).sort((a, b) => a.name.localeCompare(b.name));
       for (const station of stationList) {
         const opt = document.createElement("option");
@@ -484,7 +407,7 @@
       const tPeak = peak.dt;
       const tStart = new Date(tPeak.getTime() - 2 * 3600 * 1000);
       const tEnd = new Date(tPeak.getTime() + 2 * 3600 * 1000);
-    
+
       const rangeLine = (
         showRange &&
         peak.range !== null &&
@@ -493,7 +416,7 @@
       )
         ? `<br><span style="font-size:15px;font-weight:600;color:rgba(0,0,0,0.82);line-height:1.0;white-space:nowrap;">Range ${peak.range.toFixed(1)} ft</span>`
         : "";
-    
+
       return {
         x: peak.dt,
         y: peak.value,
@@ -525,6 +448,18 @@
       };
     }
 
+    function isLocalMinAt(series, idx) {
+      for (let j = 1; j <= 3; j++) {
+        if (
+          series[idx].value >= series[idx - j].value ||
+          series[idx].value >= series[idx + j].value
+        ) {
+          return false;
+        }
+      }
+      return true;
+    }
+
     function loadStation(stationId) {
       const station = STATIONS[stationId];
       if (!station) {
@@ -532,9 +467,9 @@
         return;
       }
 
-      forecastRangeTraceIndex = null;
       thresholdPill.innerHTML = `<strong>Flood threshold:</strong> ${station.thresholdMLLW.toFixed(2)} ft ${station.datum}`;
       chartEl.innerHTML = "";
+      setStatus(`Loading ${station.name}...`);
 
       Papa.parse(`${station.file}?v=${Date.now()}`, {
         download: true,
@@ -595,7 +530,6 @@
           const plotTransitionTime = latestObservedTime || new Date();
           const filteredForecast = forecast.filter(item => item.dt >= plotTransitionTime);
           const filteredBand = band.filter(item => item.dt >= plotTransitionTime);
-          const forecastTideRange = buildForecastTideRangeSeries(filteredForecast);
 
           const xObserved = filteredObserved.map(d => d.dt);
           const yObserved = filteredObserved.map(d => d.value);
@@ -615,12 +549,6 @@
             const match = bandLookup.get(d.dt.getTime());
             return match ? [match.low, match.high] : [null, null];
           });
-          const customdataForecastRange = forecastTideRange.map(item => [
-            item.cycleStart,
-            item.troughTime,
-            item.troughValue,
-            item.cycleEnd
-          ]);
 
           if (xObserved.length === 0 && xForecast.length === 0) {
             chartEl.innerHTML = "<p style='padding:20px;color:#b42318;font-weight:bold;'>CSV loaded, but no observed or future forecast water level values were found.</p>";
@@ -628,21 +556,10 @@
             return;
           }
 
-          function isLocalMinAt(series, idx) {
-            for (let j = 1; j <= 3; j++) {
-              if (
-                series[idx].value >= series[idx - j].value ||
-                series[idx].value >= series[idx + j].value
-              ) {
-                return false;
-              }
-            }
-            return true;
-          }
-          
           const peaks = [];
           for (let i = 3; i < filteredForecast.length - 3; i++) {
             let isLocalMax = true;
+
             for (let j = 1; j <= 3; j++) {
               if (
                 filteredForecast[i].value <= filteredForecast[i - j].value ||
@@ -652,21 +569,21 @@
                 break;
               }
             }
-          
+
             if (isLocalMax && filteredForecast[i].value >= (station.thresholdMLLW - 0.5)) {
               if (
                 peaks.length === 0 ||
                 (filteredForecast[i].dt - peaks[peaks.length - 1].dt) > 8 * 3600 * 1000
               ) {
                 let priorTrough = null;
-          
+
                 for (let k = i - 1; k >= 3; k--) {
                   if (isLocalMinAt(filteredForecast, k)) {
                     priorTrough = filteredForecast[k];
                     break;
                   }
                 }
-          
+
                 peaks.push({
                   dt: filteredForecast[i].dt,
                   value: filteredForecast[i].value,
@@ -674,16 +591,6 @@
                   troughValue: priorTrough ? priorTrough.value : null,
                   range: priorTrough ? (filteredForecast[i].value - priorTrough.value) : null
                 });
-              }
-            }
-          }
-          
-            if (isLocalMax && filteredForecast[i].value >= (station.thresholdMLLW - 0.5)) {
-              if (
-                peaks.length === 0 ||
-                (filteredForecast[i].dt - peaks[peaks.length - 1].dt) > 8 * 3600 * 1000
-              ) {
-                peaks.push(filteredForecast[i]);
               }
             }
           }
@@ -759,27 +666,8 @@
               marker: { color: "red", size: 8 },
               showlegend: false,
               hoverinfo: "skip"
-            },
-            {
-              x: forecastTideRange.map(item => item.dt),
-              y: forecastTideRange.map(item => item.value),
-              customdata: customdataForecastRange,
-              mode: "lines+markers",
-              name: "Forecast tide range (crest-to-crest)",
-              line: { width: 3, color: "#6f42c1", dash: "dot" },
-              marker: { size: 6, color: "#6f42c1", symbol: "diamond" },
-              yaxis: "y2",
-              visible: "legendonly",
-              hovertemplate:
-                `%{x|%a, %b %-d, %-I:%M %p}` +
-                `<br>Forecast tide range: %{y:.2f} ft` +
-                `<br>Cycle: %{customdata[0]|%a %-I:%M %p} to %{customdata[3]|%a %-I:%M %p}` +
-                `<br>Trough: %{customdata[2]:.2f} ft at %{customdata[1]|%a %-I:%M %p}` +
-                `<extra></extra>`
             }
           ];
-
-          forecastRangeTraceIndex = traces.length - 1;
 
           const subtitlePieces = [];
           if (latestObservedTime) {
@@ -811,14 +699,6 @@
               title: { text: `Water level in feet (${station.datum})`, font: { size: 18 } },
               tickfont: { size: 14 },
               gridcolor: "rgba(0,0,0,0.08)",
-              zeroline: false
-            },
-            yaxis2: {
-              title: { text: "Forecast tide range (ft)", font: { size: 15, color: "#6f42c1" } },
-              tickfont: { size: 13, color: "#6f42c1" },
-              overlaying: "y",
-              side: "right",
-              showgrid: false,
               zeroline: false
             },
             legend: {
@@ -858,11 +738,7 @@
             displaylogo: false
           });
 
-          toggleForecastRange.checked = false;
-          toggleForecastRange.disabled = forecastTideRange.length === 0;
-          toggleForecastRange.title = forecastTideRange.length === 0
-            ? "No crest-to-crest forecast tide range available in this forecast window."
-            : "Toggle forecast crest-to-crest tide range overlay.";
+          setStatus(`Loaded ${station.name}.`);
         },
         error: function(err) {
           chartEl.innerHTML = `<p style="padding:20px;color:#b42318;font-weight:bold;">Failed to load CSV: ${err.message}</p>`;
@@ -876,14 +752,12 @@
     stationSelect.addEventListener("change", function() {
       loadStation(this.value);
     });
-    
+
     toggleForecastRange.addEventListener("change", function() {
       loadStation(stationSelect.value);
     });
-    
-    loadStation(DEFAULT_STATION_ID);
 
-    const downloadBtn = document.getElementById("downloadBtn");
+    loadStation(DEFAULT_STATION_ID);
 
     downloadBtn.addEventListener("click", function() {
       const currentStationId = stationSelect.value;
