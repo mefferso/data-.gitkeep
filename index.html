@@ -109,43 +109,6 @@
       background-color: #155a8a;
     }
 
-    .control-group-toggle {
-      display: flex;
-      align-items: end;
-      min-width: auto;
-    }
-
-    .toggle-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      min-height: 45px;
-      padding: 0 14px;
-      border: 1px solid #bcc9d6;
-      border-radius: 12px;
-      background: #fff;
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text);
-      cursor: pointer;
-      user-select: none;
-      margin-bottom: 0;
-      text-transform: none !important;
-      letter-spacing: normal !important;
-    }
-
-    .toggle-chip input[type="checkbox"] {
-      margin: 0;
-      width: 16px;
-      height: 16px;
-      accent-color: var(--accent);
-      cursor: pointer;
-    }
-
-    .toggle-chip span {
-      white-space: nowrap;
-    }
-
     .meta {
       display: flex;
       flex-wrap: wrap;
@@ -211,13 +174,6 @@
 
           <div class="control-group" style="min-width: auto;">
             <button id="downloadBtn" class="btn">Download PNG</button>
-          </div>
-
-          <div class="control-group control-group-toggle">
-            <label class="toggle-chip">
-              <input type="checkbox" id="toggleForecastRange" />
-              <span>Show forecast tide range</span>
-            </label>
           </div>
         </div>
 
@@ -288,11 +244,8 @@
     const chartEl = document.getElementById("chart");
     const statusEl = document.getElementById("status");
     const thresholdPill = document.getElementById("thresholdPill");
-    const toggleForecastRange = document.getElementById("toggleForecastRange");
-    const downloadBtn = document.getElementById("downloadBtn");
 
     function populateStationDropdown() {
-      stationSelect.innerHTML = "";
       const stationList = Object.values(STATIONS).sort((a, b) => a.name.localeCompare(b.name));
       for (const station of stationList) {
         const opt = document.createElement("option");
@@ -353,17 +306,6 @@
       return `${day} ${formatHour(dt)}`;
     }
 
-    function formatLowHighWindow(lowDt, highDt) {
-      if (!lowDt || !highDt) return "";
-      const lowDay = lowDt.toLocaleDateString([], { weekday: "short" });
-      const highDay = highDt.toLocaleDateString([], { weekday: "short" });
-
-      if (lowDay === highDay) {
-        return `${formatHour(lowDt)} - ${formatHour(highDt)}`;
-      }
-      return `${lowDay} ${formatHour(lowDt)} - ${highDay} ${formatHour(highDt)}`;
-    }
-
     function clamp(value, min, max) {
       return Math.max(min, Math.min(max, value));
     }
@@ -374,15 +316,12 @@
       return (dt.getTime() - start.getTime()) / span;
     }
 
-    function assignPeakLabelLayout(peaks, firstTime, lastTime, showRangeMode) {
-      const plotWidthPx = Math.max((chartEl.clientWidth || 1200) - 170, 760);
-      const labelWidth = showRangeMode ? 190 : 150;
-      const edgePad = 8;
-      const laneGap = showRangeMode ? 18 : 12;
-      const laneOffsets = showRangeMode
-        ? [-74, -158, -242, -326, -410, -494]
-        : [-58, -126, -194, -262, -330];
-
+    function assignPeakLabelLayout(peaks, firstTime, lastTime) {
+      const plotWidthPx = Math.max((chartEl.clientWidth || 1200) - 150, 720);
+      const labelWidth = 150;
+      const edgePad = 6;
+      const laneGap = 10;
+      const laneOffsets = [-58, -116, -174, -232];
       const lanes = laneOffsets.map(() => ({ lastRight: -Infinity }));
 
       return peaks.map((peak) => {
@@ -417,7 +356,7 @@
       });
     }
 
-    function buildPeakLevelAnnotation(peak, layoutPos) {
+    function buildPeakAnnotation(peak, layoutPos) {
       const tPeak = peak.dt;
       const tStart = new Date(tPeak.getTime() - 2 * 3600 * 1000);
       const tEnd = new Date(tPeak.getTime() + 2 * 3600 * 1000);
@@ -446,59 +385,10 @@
           size: 12
         },
         text:
-          `<span style="font-size:18px;font-weight:700;line-height:1.0;white-space:nowrap;">${formatPeakTime(tPeak)}</span><br>` +
-          `<span style="font-size:18px;font-weight:700;line-height:1.0;white-space:nowrap;">${peak.value.toFixed(1)} ft</span><br>` +
+          `<span style="font-size:18px;font-weight:600;line-height:1.0;white-space:nowrap;">${formatPeakTime(tPeak)}</span><br>` +
+          `<span style="font-size:18px;font-weight:600;line-height:1.0;white-space:nowrap;">${peak.value.toFixed(1)} ft</span><br>` +
           `<span style="font-size:15px;font-weight:500;color:rgba(0,0,0,0.72);line-height:1.0;white-space:nowrap;">Likely ${formatHour(tStart)} - ${formatHour(tEnd)}</span>`
       };
-    }
-
-    function buildRangeAnnotation(peak, layoutPos) {
-      const rangeText = (peak.range !== null && Number.isFinite(peak.range))
-        ? peak.range.toFixed(1)
-        : "--";
-
-      const lowHighText = formatLowHighWindow(peak.troughDt, peak.dt) || "--";
-
-      return {
-        x: peak.dt,
-        y: peak.value,
-        xanchor: "center",
-        yanchor: "bottom",
-        align: "center",
-        showarrow: true,
-        arrowhead: 0,
-        arrowwidth: 1.35,
-        arrowcolor: "#000000",
-        ax: layoutPos.ax,
-        ay: layoutPos.ay,
-        standoff: 2,
-        bgcolor: "#5aa2ee",
-        bordercolor: "#000000",
-        borderwidth: 1,
-        borderpad: 6,
-        opacity: 1,
-        font: {
-          family: "Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-          color: "#000000",
-          size: 12
-        },
-        text:
-          `<span style="font-size:18px;font-weight:700;line-height:1.0;white-space:nowrap;">${formatPeakTime(peak.dt)}</span><br>` +
-          `<span style="font-size:18px;font-weight:700;line-height:1.0;white-space:nowrap;">Tide Range ${rangeText} ft</span><br>` +
-          `<span style="font-size:15px;font-weight:500;color:rgba(0,0,0,0.72);line-height:1.0;white-space:nowrap;">Low - High ${lowHighText}</span>`
-      };
-    }
-
-    function isLocalMinAt(series, idx) {
-      for (let j = 1; j <= 3; j++) {
-        if (
-          series[idx].value >= series[idx - j].value ||
-          series[idx].value >= series[idx + j].value
-        ) {
-          return false;
-        }
-      }
-      return true;
     }
 
     function loadStation(stationId) {
@@ -508,11 +398,8 @@
         return;
       }
 
-      const showRangeMode = toggleForecastRange.checked;
-
       thresholdPill.innerHTML = `<strong>Flood threshold:</strong> ${station.thresholdMLLW.toFixed(2)} ft ${station.datum}`;
       chartEl.innerHTML = "";
-      setStatus(`Loading ${station.name}...`);
 
       Papa.parse(`${station.file}?v=${Date.now()}`, {
         download: true,
@@ -602,7 +489,6 @@
           const peaks = [];
           for (let i = 3; i < filteredForecast.length - 3; i++) {
             let isLocalMax = true;
-
             for (let j = 1; j <= 3; j++) {
               if (
                 filteredForecast[i].value <= filteredForecast[i - j].value ||
@@ -618,35 +504,16 @@
                 peaks.length === 0 ||
                 (filteredForecast[i].dt - peaks[peaks.length - 1].dt) > 8 * 3600 * 1000
               ) {
-                let priorTrough = null;
-
-                for (let k = i - 1; k >= 3; k--) {
-                  if (isLocalMinAt(filteredForecast, k)) {
-                    priorTrough = filteredForecast[k];
-                    break;
-                  }
-                }
-
-                peaks.push({
-                  dt: filteredForecast[i].dt,
-                  value: filteredForecast[i].value,
-                  troughDt: priorTrough ? priorTrough.dt : null,
-                  troughValue: priorTrough ? priorTrough.value : null,
-                  range: priorTrough ? (filteredForecast[i].value - priorTrough.value) : null
-                });
+                peaks.push(filteredForecast[i]);
               }
             }
           }
-
-          const peaksForLabels = showRangeMode
-            ? peaks.filter(p => p.range !== null && Number.isFinite(p.range) && p.troughDt)
-            : peaks;
 
           const allTimes = [...xObserved, ...xForecast].sort((a, b) => a - b);
           const firstTime = allTimes[0];
           const lastTime = allTimes[allTimes.length - 1];
 
-          const peakLayouts = assignPeakLabelLayout(peaksForLabels, firstTime, lastTime, showRangeMode);
+          const peakLayouts = assignPeakLabelLayout(peaks, firstTime, lastTime);
 
           const traces = [
             {
@@ -735,7 +602,7 @@
             paper_bgcolor: "#ffffff",
             plot_bgcolor: "#ffffff",
             hovermode: "closest",
-            margin: { l: 80, r: 36, t: 380, b: 170 },
+            margin: { l: 80, r: 36, t: 250, b: 170 },
             xaxis: {
               tickformat: "%a, %b %-d",
               tickfont: { size: 14 },
@@ -775,12 +642,8 @@
             ]
           };
 
-          peaksForLabels.forEach((p, idx) => {
-            if (showRangeMode) {
-              layout.annotations.push(buildRangeAnnotation(p, peakLayouts[idx]));
-            } else {
-              layout.annotations.push(buildPeakLevelAnnotation(p, peakLayouts[idx]));
-            }
+          peaks.forEach((p, idx) => {
+            layout.annotations.push(buildPeakAnnotation(p, peakLayouts[idx]));
           });
 
           Plotly.newPlot("chart", traces, layout, {
@@ -788,8 +651,6 @@
             displayModeBar: false,
             displaylogo: false
           });
-
-          setStatus(`Loaded ${station.name}.`);
         },
         error: function(err) {
           chartEl.innerHTML = `<p style="padding:20px;color:#b42318;font-weight:bold;">Failed to load CSV: ${err.message}</p>`;
@@ -804,11 +665,9 @@
       loadStation(this.value);
     });
 
-    toggleForecastRange.addEventListener("change", function() {
-      loadStation(stationSelect.value);
-    });
-
     loadStation(DEFAULT_STATION_ID);
+
+    const downloadBtn = document.getElementById("downloadBtn");
 
     downloadBtn.addEventListener("click", function() {
       const currentStationId = stationSelect.value;
