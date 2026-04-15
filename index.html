@@ -558,6 +558,7 @@
           const plotTransitionTime = latestObservedTime || new Date();
           const filteredForecast = forecast.filter(item => item.dt >= plotTransitionTime);
           const filteredBand = band.filter(item => item.dt >= plotTransitionTime);
+          const forecastTideRange = buildForecastTideRangeSeries(filteredForecast);
 
           const xObserved = filteredObserved.map(d => d.dt);
           const yObserved = filteredObserved.map(d => d.value);
@@ -677,8 +678,27 @@
               marker: { color: "red", size: 8 },
               showlegend: false,
               hoverinfo: "skip"
+            },
+            {
+              x: forecastTideRange.map(item => item.dt),
+              y: forecastTideRange.map(item => item.value),
+              customdata: customdataForecastRange,
+              mode: "lines+markers",
+              name: "Forecast tide range (crest-to-crest)",
+              line: { width: 3, color: "#6f42c1", dash: "dot" },
+              marker: { size: 6, color: "#6f42c1", symbol: "diamond" },
+              yaxis: "y2",
+              visible: "legendonly",
+              hovertemplate:
+                `%{x|%a, %b %-d, %-I:%M %p}` +
+                `<br>Forecast tide range: %{y:.2f} ft` +
+                `<br>Cycle: %{customdata[0]|%a %-I:%M %p} to %{customdata[3]|%a %-I:%M %p}` +
+                `<br>Trough: %{customdata[2]:.2f} ft at %{customdata[1]|%a %-I:%M %p}` +
+                `<extra></extra>`
             }
           ];
+
+          forecastRangeTraceIndex = traces.length - 1;
 
           const subtitlePieces = [];
           if (latestObservedTime) {
@@ -710,6 +730,14 @@
               title: { text: `Water level in feet (${station.datum})`, font: { size: 18 } },
               tickfont: { size: 14 },
               gridcolor: "rgba(0,0,0,0.08)",
+              zeroline: false
+            },
+            yaxis2: {
+              title: { text: "Forecast tide range (ft)", font: { size: 15, color: "#6f42c1" } },
+              tickfont: { size: 13, color: "#6f42c1" },
+              overlaying: "y",
+              side: "right",
+              showgrid: false,
               zeroline: false
             },
             legend: {
