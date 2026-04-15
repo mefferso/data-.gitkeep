@@ -635,6 +635,18 @@
             return;
           }
 
+          function isLocalMinAt(series, idx) {
+            for (let j = 1; j <= 3; j++) {
+              if (
+                series[idx].value >= series[idx - j].value ||
+                series[idx].value >= series[idx + j].value
+              ) {
+                return false;
+              }
+            }
+            return true;
+          }
+          
           const peaks = [];
           for (let i = 3; i < filteredForecast.length - 3; i++) {
             let isLocalMax = true;
@@ -647,7 +659,32 @@
                 break;
               }
             }
-
+          
+            if (isLocalMax && filteredForecast[i].value >= (station.thresholdMLLW - 0.5)) {
+              if (
+                peaks.length === 0 ||
+                (filteredForecast[i].dt - peaks[peaks.length - 1].dt) > 8 * 3600 * 1000
+              ) {
+                let priorTrough = null;
+          
+                for (let k = i - 1; k >= 3; k--) {
+                  if (isLocalMinAt(filteredForecast, k)) {
+                    priorTrough = filteredForecast[k];
+                    break;
+                  }
+                }
+          
+                peaks.push({
+                  dt: filteredForecast[i].dt,
+                  value: filteredForecast[i].value,
+                  troughDt: priorTrough ? priorTrough.dt : null,
+                  troughValue: priorTrough ? priorTrough.value : null,
+                  range: priorTrough ? (filteredForecast[i].value - priorTrough.value) : null
+                });
+              }
+            }
+          }
+          
             if (isLocalMax && filteredForecast[i].value >= (station.thresholdMLLW - 0.5)) {
               if (
                 peaks.length === 0 ||
@@ -819,7 +856,7 @@
           };
 
           peaks.forEach((p, idx) => {
-            layout.annotations.push(buildPeakAnnotation(p, peakLayouts[idx]));
+            layout.annotations.push(buildPeakAnnotation(p, peakLayouts[idx], toggleForecastRange.checked));
           });
 
           Plotly.newPlot("chart", traces, layout, {
@@ -846,13 +883,11 @@
     stationSelect.addEventListener("change", function() {
       loadStation(this.value);
     });
-
+    
     toggleForecastRange.addEventListener("change", function() {
-      if (forecastRangeTraceIndex === null) return;
-      const visibleState = this.checked ? true : "legendonly";
-      Plotly.restyle("chart", { visible: visibleState }, [forecastRangeTraceIndex]);
+      loadStation(stationSelect.value);
     });
-
+    
     loadStation(DEFAULT_STATION_ID);
 
     const downloadBtn = document.getElementById("downloadBtn");
