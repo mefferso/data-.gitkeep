@@ -432,6 +432,9 @@
       }
 
       thresholdPill.innerHTML = `<strong>Flood threshold:</strong> ${station.thresholdMLLW.toFixed(2)} ft ${station.datum}`;
+      
+      // FIX: Safely destroy the old Plotly instance before clearing the HTML
+      Plotly.purge("chart"); 
       chartEl.innerHTML = "";
       
       Papa.parse(`${station.file}?v=${Date.now()}`, {
@@ -709,7 +712,6 @@
         }
       });
     }
-
     populateStationDropdown();
     
     stationSelect.addEventListener("change", function() {
