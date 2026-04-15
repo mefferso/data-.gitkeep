@@ -353,6 +353,17 @@
       return `${day} ${formatHour(dt)}`;
     }
 
+    function formatLowHighWindow(lowDt, highDt) {
+      if (!lowDt || !highDt) return "";
+      const lowDay = lowDt.toLocaleDateString([], { weekday: "short" });
+      const highDay = highDt.toLocaleDateString([], { weekday: "short" });
+
+      if (lowDay === highDay) {
+        return `${formatHour(lowDt)} - ${formatHour(highDt)}`;
+      }
+      return `${lowDay} ${formatHour(lowDt)} - ${highDay} ${formatHour(highDt)}`;
+    }
+
     function clamp(value, min, max) {
       return Math.max(min, Math.min(max, value));
     }
@@ -363,12 +374,15 @@
       return (dt.getTime() - start.getTime()) / span;
     }
 
-    function assignPeakLabelLayout(peaks, firstTime, lastTime) {
-      const plotWidthPx = Math.max((chartEl.clientWidth || 1200) - 150, 720);
-      const labelWidth = 150;
-      const edgePad = 6;
-      const laneGap = 10;
-      const laneOffsets = [-58, -116, -174, -232];
+    function assignPeakLabelLayout(peaks, firstTime, lastTime, showRangeMode) {
+      const plotWidthPx = Math.max((chartEl.clientWidth || 1200) - 170, 760);
+      const labelWidth = showRangeMode ? 190 : 150;
+      const edgePad = 8;
+      const laneGap = showRangeMode ? 18 : 12;
+      const laneOffsets = showRangeMode
+        ? [-74, -158, -242, -326, -410, -494]
+        : [-58, -126, -194, -262, -330];
+
       const lanes = laneOffsets.map(() => ({ lastRight: -Infinity }));
 
       return peaks.map((peak) => {
@@ -403,19 +417,10 @@
       });
     }
 
-    function buildPeakAnnotation(peak, layoutPos, showRange) {
+    function buildPeakLevelAnnotation(peak, layoutPos) {
       const tPeak = peak.dt;
       const tStart = new Date(tPeak.getTime() - 2 * 3600 * 1000);
       const tEnd = new Date(tPeak.getTime() + 2 * 3600 * 1000);
-
-      const rangeLine = (
-        showRange &&
-        peak.range !== null &&
-        peak.range !== undefined &&
-        Number.isFinite(peak.range)
-      )
-        ? `<br><span style="font-size:15px;font-weight:600;color:rgba(0,0,0,0.82);line-height:1.0;white-space:nowrap;">Range ${peak.range.toFixed(1)} ft</span>`
-        : "";
 
       return {
         x: peak.dt,
@@ -441,10 +446,46 @@
           size: 12
         },
         text:
-          `<span style="font-size:18px;font-weight:600;line-height:1.0;white-space:nowrap;">${formatPeakTime(tPeak)}</span><br>` +
-          `<span style="font-size:18px;font-weight:600;line-height:1.0;white-space:nowrap;">${peak.value.toFixed(1)} ft</span>` +
-          rangeLine +
-          `<br><span style="font-size:15px;font-weight:500;color:rgba(0,0,0,0.72);line-height:1.0;white-space:nowrap;">Likely ${formatHour(tStart)} - ${formatHour(tEnd)}</span>`
+          `<span style="font-size:18px;font-weight:700;line-height:1.0;white-space:nowrap;">${formatPeakTime(tPeak)}</span><br>` +
+          `<span style="font-size:18px;font-weight:700;line-height:1.0;white-space:nowrap;">${peak.value.toFixed(1)} ft</span><br>` +
+          `<span style="font-size:15px;font-weight:500;color:rgba(0,0,0,0.72);line-height:1.0;white-space:nowrap;">Likely ${formatHour(tStart)} - ${formatHour(tEnd)}</span>`
+      };
+    }
+
+    function buildRangeAnnotation(peak, layoutPos) {
+      const rangeText = (peak.range !== null && Number.isFinite(peak.range))
+        ? peak.range.toFixed(1)
+        : "--";
+
+      const lowHighText = formatLowHighWindow(peak.troughDt, peak.dt) || "--";
+
+      return {
+        x: peak.dt,
+        y: peak.value,
+        xanchor: "center",
+        yanchor: "bottom",
+        align: "center",
+        showarrow: true,
+        arrowhead: 0,
+        arrowwidth: 1.35,
+        arrowcolor: "#000000",
+        ax: layoutPos.ax,
+        ay: layoutPos.ay,
+        standoff: 2,
+        bgcolor: "#5aa2ee",
+        bordercolor: "#000000",
+        borderwidth: 1,
+        borderpad: 6,
+        opacity: 1,
+        font: {
+          family: "Segoe UI, Roboto, Helvetica, Arial, sans-serif",
+          color: "#000000",
+          size: 12
+        },
+        text:
+          `<span style="font-size:18px;font-weight:700;line-height:1.0;white-space:nowrap;">${formatPeakTime(peak.dt)}</span><br>` +
+          `<span style="font-size:18px;font-weight:700;line-height:1.0;white-space:nowrap;">Tide Range ${rangeText} ft</span><br>` +
+          `<span style="font-size:15px;font-weight:500;color:rgba(0,0,0,0.72);line-height:1.0;white-space:nowrap;">Low - High ${lowHighText}</span>`
       };
     }
 
@@ -466,6 +507,8 @@
         setStatus("Unknown station selected.", true);
         return;
       }
+
+      const showRangeMode = toggleForecastRange.checked;
 
       thresholdPill.innerHTML = `<strong>Flood threshold:</strong> ${station.thresholdMLLW.toFixed(2)} ft ${station.datum}`;
       chartEl.innerHTML = "";
@@ -595,11 +638,15 @@
             }
           }
 
+          const peaksForLabels = showRangeMode
+            ? peaks.filter(p => p.range !== null && Number.isFinite(p.range) && p.troughDt)
+            : peaks;
+
           const allTimes = [...xObserved, ...xForecast].sort((a, b) => a - b);
           const firstTime = allTimes[0];
           const lastTime = allTimes[allTimes.length - 1];
 
-          const peakLayouts = assignPeakLabelLayout(peaks, firstTime, lastTime);
+          const peakLayouts = assignPeakLabelLayout(peaksForLabels, firstTime, lastTime, showRangeMode);
 
           const traces = [
             {
@@ -688,7 +735,7 @@
             paper_bgcolor: "#ffffff",
             plot_bgcolor: "#ffffff",
             hovermode: "closest",
-            margin: { l: 80, r: 36, t: 250, b: 170 },
+            margin: { l: 80, r: 36, t: 380, b: 170 },
             xaxis: {
               tickformat: "%a, %b %-d",
               tickfont: { size: 14 },
@@ -728,8 +775,12 @@
             ]
           };
 
-          peaks.forEach((p, idx) => {
-            layout.annotations.push(buildPeakAnnotation(p, peakLayouts[idx], toggleForecastRange.checked));
+          peaksForLabels.forEach((p, idx) => {
+            if (showRangeMode) {
+              layout.annotations.push(buildRangeAnnotation(p, peakLayouts[idx]));
+            } else {
+              layout.annotations.push(buildPeakLevelAnnotation(p, peakLayouts[idx]));
+            }
           });
 
           Plotly.newPlot("chart", traces, layout, {
