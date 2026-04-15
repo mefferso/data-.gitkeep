@@ -432,8 +432,6 @@
       }
 
       thresholdPill.innerHTML = `<strong>Flood threshold:</strong> ${station.thresholdMLLW.toFixed(2)} ft ${station.datum}`;
-      
-      // FIX: Safely destroy the old Plotly instance before clearing the HTML
       Plotly.purge("chart"); 
       chartEl.innerHTML = "";
       
@@ -522,7 +520,8 @@
             return;
           }
 
-          const peaks = [];
+          // Gather ALL local max peaks, regardless of flood threshold
+          const allPeaks = [];
           for (let i = 3; i < filteredForecast.length - 3; i++) {
             let isLocalMax = true;
             for (let j = 1; j <= 3; j++) {
@@ -535,18 +534,18 @@
               }
             }
 
-            if (isLocalMax && filteredForecast[i].value >= (station.thresholdMLLW - 0.5)) {
+            // Only constraint is it's a local max and at least 8 hours away from the previous peak
+            if (isLocalMax) {
               if (
-                peaks.length === 0 ||
-                (filteredForecast[i].dt - peaks[peaks.length - 1].dt) > 8 * 3600 * 1000
+                allPeaks.length === 0 ||
+                (filteredForecast[i].dt - allPeaks[allPeaks.length - 1].dt) > 8 * 3600 * 1000
                ) {
-                // Determine Daily Tidal Range
                 const peakDateStr = filteredForecast[i].dt.toLocaleDateString();
                 const dailyData = filteredForecast.filter(d => d.dt.toLocaleDateString() === peakDateStr);
                 const dailyMax = Math.max(...dailyData.map(d => d.value));
                 const dailyMin = Math.min(...dailyData.map(d => d.value));
                 
-                peaks.push({
+                allPeaks.push({
                     ...filteredForecast[i],
                     dailyRange: dailyMax - dailyMin
                 });
@@ -557,8 +556,6 @@
           const allTimes = [...xObserved, ...xForecast].sort((a, b) => a - b);
           const firstTime = allTimes[0];
           const lastTime = allTimes[allTimes.length - 1];
-
-          const peakLayouts = assignPeakLabelLayout(peaks, firstTime, lastTime);
           
           const traces = [
             {
@@ -618,8 +615,8 @@
               hoverinfo: "skip"
             },
             {
-              x: peaks.map(p => p.dt),
-              y: peaks.map(p => p.value),
+              x: [], // Set dynamically in redrawCurrentChart
+              y: [], // Set dynamically in redrawCurrentChart
               mode: "markers",
               name: "Peak tides",
               marker: { color: "red", size: 8 },
@@ -676,6 +673,17 @@
           redrawCurrentChart = function() {
             const showRange = rangeToggle.checked;
             
+            // Dynamic Peaks: Show all when toggled on, show only threatening peaks when off
+            const activePeaks = showRange 
+              ? allPeaks 
+              : allPeaks.filter(p => p.value >= (station.thresholdMLLW - 0.5));
+            
+            const activePeakLayouts = assignPeakLabelLayout(activePeaks, firstTime, lastTime);
+
+            // Update red marker coordinates
+            traces[5].x = activePeaks.map(p => p.dt);
+            traces[5].y = activePeaks.map(p => p.value);
+
             // Base annotations array reset
             layout.annotations = [
                {
@@ -692,8 +700,8 @@
               }
             ];
 
-            peaks.forEach((p, idx) => {
-              layout.annotations.push(buildPeakAnnotation(p, peakLayouts[idx], showRange));
+            activePeaks.forEach((p, idx) => {
+              layout.annotations.push(buildPeakAnnotation(p, activePeakLayouts[idx], showRange));
             });
 
             Plotly.react("chart", traces, layout, {
@@ -712,6 +720,7 @@
         }
       });
     }
+
     populateStationDropdown();
     
     stationSelect.addEventListener("change", function() {
