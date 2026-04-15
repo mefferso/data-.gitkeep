@@ -109,6 +109,29 @@
       background-color: #155a8a;
     }
 
+    .check-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 45px;
+      padding: 0 12px;
+      border: 1px solid #bcc9d6;
+      border-radius: 12px;
+      background: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      color: #2a3a49;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .check-wrap input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
     .meta {
       display: flex;
       flex-wrap: wrap;
@@ -174,6 +197,13 @@
 
           <div class="control-group" style="min-width: auto;">
             <button id="downloadBtn" class="btn">Download PNG</button>
+          </div>
+
+          <div class="control-group" style="min-width: auto;">
+            <label class="check-wrap" for="toggleForecastRange">
+              <input id="toggleForecastRange" type="checkbox" />
+              Show forecast tide range
+            </label>
           </div>
         </div>
 
@@ -244,6 +274,44 @@
     const chartEl = document.getElementById("chart");
     const statusEl = document.getElementById("status");
     const thresholdPill = document.getElementById("thresholdPill");
+    const toggleForecastRange = document.getElementById("toggleForecastRange");
+    let currentAnnotationContext = null;
+
+    function isStrictLocalExtrema(series, idx, neighborhood, kind) {
+      const curr = series[idx]?.value;
+      if (curr === null || curr === undefined) return false;
+
+      for (let j = 1; j <= neighborhood; j++) {
+        const left = series[idx - j]?.value;
+        const right = series[idx + j]?.value;
+        if (left === null || right === null || left === undefined || right === undefined) return false;
+
+        if (kind === "max") {
+          if (curr <= left || curr <= right) return false;
+        } else if (kind === "min") {
+          if (curr >= left || curr >= right) return false;
+        }
+      }
+      return true;
+    }
+
+    function getForecastPeakRange(peak, forecastSeries, neighborhood = 3) {
+      const peakIndex = forecastSeries.findIndex(item => item.dt.getTime() === peak.dt.getTime());
+      if (peakIndex <= neighborhood) return null;
+
+      let trough = null;
+      for (let i = peakIndex - 1; i >= neighborhood; i--) {
+        if (isStrictLocalExtrema(forecastSeries, i, neighborhood, "min")) {
+          trough = forecastSeries[i];
+          break;
+        }
+      }
+
+      if (!trough) return null;
+      const range = peak.value - trough.value;
+      if (!Number.isFinite(range) || range <= 0) return null;
+      return range;
+    }
 
     function populateStationDropdown() {
       const stationList = Object.values(STATIONS).sort((a, b) => a.name.localeCompare(b.name));
@@ -356,10 +424,13 @@
       });
     }
 
-    function buildPeakAnnotation(peak, layoutPos) {
+    function buildPeakAnnotation(peak, layoutPos, rangeFt, showRange) {
       const tPeak = peak.dt;
       const tStart = new Date(tPeak.getTime() - 2 * 3600 * 1000);
       const tEnd = new Date(tPeak.getTime() + 2 * 3600 * 1000);
+      const rangeLine = showRange && rangeFt !== null
+        ? `<br><span style="font-size:15px;font-weight:600;line-height:1.0;white-space:nowrap;">Range ${rangeFt.toFixed(1)} ft</span>`
+        : "";
 
       return {
         x: peak.dt,
@@ -387,8 +458,33 @@
         text:
           `<span style="font-size:18px;font-weight:600;line-height:1.0;white-space:nowrap;">${formatPeakTime(tPeak)}</span><br>` +
           `<span style="font-size:18px;font-weight:600;line-height:1.0;white-space:nowrap;">${peak.value.toFixed(1)} ft</span><br>` +
-          `<span style="font-size:15px;font-weight:500;color:rgba(0,0,0,0.72);line-height:1.0;white-space:nowrap;">Likely ${formatHour(tStart)} - ${formatHour(tEnd)}</span>`
+          `<span style="font-size:15px;font-weight:500;color:rgba(0,0,0,0.72);line-height:1.0;white-space:nowrap;">Likely ${formatHour(tStart)} - ${formatHour(tEnd)}</span>` +
+          rangeLine
       };
+    }
+
+    function buildChartAnnotations(station, peaks, peakLayouts, forecastSeries, showRange) {
+      const annotations = [
+        {
+          xref: "paper",
+          yref: "y",
+          x: 0.01,
+          y: station.thresholdMLLW,
+          xanchor: "left",
+          yanchor: "bottom",
+          text: "<b>Minor Coastal Flooding</b>",
+          showarrow: false,
+          font: { color: "#ff7f0e", size: 13 },
+          yshift: 4
+        }
+      ];
+
+      peaks.forEach((peak, idx) => {
+        const rangeFt = getForecastPeakRange(peak, forecastSeries, 3);
+        annotations.push(buildPeakAnnotation(peak, peakLayouts[idx], rangeFt, showRange));
+      });
+
+      return annotations;
     }
 
     function loadStation(stationId) {
@@ -398,6 +494,8 @@
         return;
       }
 
+      currentAnnotationContext = null;
+      toggleForecastRange.checked = false;
       thresholdPill.innerHTML = `<strong>Flood threshold:</strong> ${station.thresholdMLLW.toFixed(2)} ft ${station.datum}`;
       chartEl.innerHTML = "";
 
@@ -479,7 +577,6 @@
             const match = bandLookup.get(d.dt.getTime());
             return match ? [match.low, match.high] : [null, null];
           });
-
           if (xObserved.length === 0 && xForecast.length === 0) {
             chartEl.innerHTML = "<p style='padding:20px;color:#b42318;font-weight:bold;'>CSV loaded, but no observed or future forecast water level values were found.</p>";
             setStatus(`No plotted data found for ${station.name}.`, true);
@@ -626,31 +723,25 @@
               borderwidth: 0,
               font: { size: 14 }
             },
-            annotations: [
-              {
-                xref: "paper",
-                yref: "y",
-                x: 0.01,
-                y: station.thresholdMLLW,
-                xanchor: "left",
-                yanchor: "bottom",
-                text: "<b>Minor Coastal Flooding</b>",
-                showarrow: false,
-                font: { color: "#ff7f0e", size: 13 },
-                yshift: 4
-              }
-            ]
+            annotations: buildChartAnnotations(
+              station,
+              peaks,
+              peakLayouts,
+              filteredForecast,
+              toggleForecastRange.checked
+            )
           };
-
-          peaks.forEach((p, idx) => {
-            layout.annotations.push(buildPeakAnnotation(p, peakLayouts[idx]));
-          });
 
           Plotly.newPlot("chart", traces, layout, {
             responsive: true,
             displayModeBar: false,
             displaylogo: false
           });
+
+          toggleForecastRange.checked = false;
+          toggleForecastRange.disabled = false;
+          toggleForecastRange.title = "Toggle forecast tide range text on forecast peak annotations.";
+          currentAnnotationContext = { station, peaks, peakLayouts, filteredForecast };
         },
         error: function(err) {
           chartEl.innerHTML = `<p style="padding:20px;color:#b42318;font-weight:bold;">Failed to load CSV: ${err.message}</p>`;
@@ -663,6 +754,18 @@
 
     stationSelect.addEventListener("change", function() {
       loadStation(this.value);
+    });
+
+    toggleForecastRange.addEventListener("change", function() {
+      if (!currentAnnotationContext) return;
+      const annotations = buildChartAnnotations(
+        currentAnnotationContext.station,
+        currentAnnotationContext.peaks,
+        currentAnnotationContext.peakLayouts,
+        currentAnnotationContext.filteredForecast,
+        this.checked
+      );
+      Plotly.relayout("chart", { annotations });
     });
 
     loadStation(DEFAULT_STATION_ID);
