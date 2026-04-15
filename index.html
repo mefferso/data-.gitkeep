@@ -92,6 +92,20 @@
       box-shadow: 0 0 0 3px rgba(31, 119, 180, 0.12);
     }
 
+    .toggle-label {
+      display: flex !important;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      color: var(--text) !important;
+      font-weight: 700 !important;
+      text-transform: none !important;
+      letter-spacing: normal !important;
+      margin: 0 !important;
+      font-size: 14px !important;
+      height: 45px;
+    }
+
     .btn {
       padding: 12px 18px;
       font-size: 14px;
@@ -172,6 +186,13 @@
             <select id="stationSelect"></select>
           </div>
 
+          <div class="control-group" style="min-width: auto; align-self: end;">
+            <label class="toggle-label" for="rangeToggle">
+              <input type="checkbox" id="rangeToggle" style="width: 18px; height: 18px; cursor: pointer;">
+              Show Daily Tidal Range
+            </label>
+          </div>
+
           <div class="control-group" style="min-width: auto;">
             <button id="downloadBtn" class="btn">Download PNG</button>
           </div>
@@ -192,7 +213,6 @@
 
   <script>
     const observedHoursBack = 72;
-
     const STATIONS = {
       "8747437": {
         id: "8747437",
@@ -237,13 +257,15 @@
         file: "data/8761927.csv"
       }
     };
-
     const DEFAULT_STATION_ID = "8761927";
 
     const stationSelect = document.getElementById("stationSelect");
     const chartEl = document.getElementById("chart");
     const statusEl = document.getElementById("status");
     const thresholdPill = document.getElementById("thresholdPill");
+    const rangeToggle = document.getElementById("rangeToggle");
+    
+    let redrawCurrentChart = null;
 
     function populateStationDropdown() {
       const stationList = Object.values(STATIONS).sort((a, b) => a.name.localeCompare(b.name));
@@ -333,6 +355,7 @@
           edgePad,
           Math.max(edgePad, plotWidthPx - labelWidth - edgePad)
         );
+    
         const boxRight = boxLeft + labelWidth;
 
         let laneIndex = lanes.findIndex(lane => boxLeft > lane.lastRight + laneGap);
@@ -356,10 +379,23 @@
       });
     }
 
-    function buildPeakAnnotation(peak, layoutPos) {
+    function buildPeakAnnotation(peak, layoutPos, showRange) {
       const tPeak = peak.dt;
-      const tStart = new Date(tPeak.getTime() - 2 * 3600 * 1000);
-      const tEnd = new Date(tPeak.getTime() + 2 * 3600 * 1000);
+      let contentText = "";
+
+      if (showRange && peak.dailyRange !== undefined) {
+        const dayName = formatPeakTime(tPeak).split(' ')[0];
+        contentText = 
+          `<span style="font-size:16px;font-weight:600;line-height:1.0;white-space:nowrap;">${dayName} Tidal Range</span><br>` +
+          `<span style="font-size:18px;font-weight:600;line-height:1.0;white-space:nowrap;color:#ffffff;">${peak.dailyRange.toFixed(1)} ft</span>`;
+      } else {
+        const tStart = new Date(tPeak.getTime() - 2 * 3600 * 1000);
+        const tEnd = new Date(tPeak.getTime() + 2 * 3600 * 1000);
+        contentText =
+          `<span style="font-size:18px;font-weight:600;line-height:1.0;white-space:nowrap;">${formatPeakTime(tPeak)}</span><br>` +
+          `<span style="font-size:18px;font-weight:600;line-height:1.0;white-space:nowrap;">${peak.value.toFixed(1)} ft</span><br>` +
+          `<span style="font-size:15px;font-weight:500;color:rgba(0,0,0,0.72);line-height:1.0;white-space:nowrap;">Likely ${formatHour(tStart)} - ${formatHour(tEnd)}</span>`;
+      }
 
       return {
         x: peak.dt,
@@ -374,20 +410,17 @@
         ax: layoutPos.ax,
         ay: layoutPos.ay,
         standoff: 2,
-        bgcolor: "#5aa2ee",
+        bgcolor: showRange ? "#1f77b4" : "#5aa2ee",
         bordercolor: "#000000",
         borderwidth: 1,
         borderpad: 5,
         opacity: 1,
         font: {
           family: "Segoe UI, Roboto, Helvetica, Arial, sans-serif",
-          color: "#000000",
+          color: showRange ? "#ffffff" : "#000000",
           size: 12
         },
-        text:
-          `<span style="font-size:18px;font-weight:600;line-height:1.0;white-space:nowrap;">${formatPeakTime(tPeak)}</span><br>` +
-          `<span style="font-size:18px;font-weight:600;line-height:1.0;white-space:nowrap;">${peak.value.toFixed(1)} ft</span><br>` +
-          `<span style="font-size:15px;font-weight:500;color:rgba(0,0,0,0.72);line-height:1.0;white-space:nowrap;">Likely ${formatHour(tStart)} - ${formatHour(tEnd)}</span>`
+        text: contentText
       };
     }
 
@@ -400,7 +433,7 @@
 
       thresholdPill.innerHTML = `<strong>Flood threshold:</strong> ${station.thresholdMLLW.toFixed(2)} ft ${station.datum}`;
       chartEl.innerHTML = "";
-
+      
       Papa.parse(`${station.file}?v=${Date.now()}`, {
         download: true,
         dynamicTyping: false,
@@ -436,7 +469,7 @@
             const twl = toNumber(row[COL_TWL]);
             const twl90 = toNumber(row[COL_TWL90P]);
             const twl10 = toNumber(row[COL_TWL10P]);
-
+            
             if (ob !== null) observed.push({ dt, value: ob });
             if (twl !== null) forecast.push({ dt, value: twl });
             if (twl10 !== null && twl90 !== null) band.push({ dt, low: twl10, high: twl90 });
@@ -454,13 +487,13 @@
           const observedCutoffTime = latestObservedTime
             ? new Date(latestObservedTime.getTime() - observedHoursBack * 60 * 60 * 1000)
             : null;
-
+            
           const filteredObserved = observed.filter(item => !observedCutoffTime || item.dt >= observedCutoffTime);
 
           const plotTransitionTime = latestObservedTime || new Date();
           const filteredForecast = forecast.filter(item => item.dt >= plotTransitionTime);
           const filteredBand = band.filter(item => item.dt >= plotTransitionTime);
-
+          
           const xObserved = filteredObserved.map(d => d.dt);
           const yObserved = filteredObserved.map(d => d.value);
 
@@ -474,12 +507,12 @@
           const bandLookup = new Map(
             filteredBand.map(d => [d.dt.getTime(), { low: d.low, high: d.high }])
           );
-
+          
           const customdataForecast = filteredForecast.map(d => {
             const match = bandLookup.get(d.dt.getTime());
             return match ? [match.low, match.high] : [null, null];
           });
-
+          
           if (xObserved.length === 0 && xForecast.length === 0) {
             chartEl.innerHTML = "<p style='padding:20px;color:#b42318;font-weight:bold;'>CSV loaded, but no observed or future forecast water level values were found.</p>";
             setStatus(`No plotted data found for ${station.name}.`, true);
@@ -503,8 +536,17 @@
               if (
                 peaks.length === 0 ||
                 (filteredForecast[i].dt - peaks[peaks.length - 1].dt) > 8 * 3600 * 1000
-              ) {
-                peaks.push(filteredForecast[i]);
+               ) {
+                // Determine Daily Tidal Range
+                const peakDateStr = filteredForecast[i].dt.toLocaleDateString();
+                const dailyData = filteredForecast.filter(d => d.dt.toLocaleDateString() === peakDateStr);
+                const dailyMax = Math.max(...dailyData.map(d => d.value));
+                const dailyMin = Math.min(...dailyData.map(d => d.value));
+                
+                peaks.push({
+                    ...filteredForecast[i],
+                    dailyRange: dailyMax - dailyMin
+                });
               }
             }
           }
@@ -514,7 +556,7 @@
           const lastTime = allTimes[allTimes.length - 1];
 
           const peakLayouts = assignPeakLabelLayout(peaks, firstTime, lastTime);
-
+          
           const traces = [
             {
               x: [firstTime, lastTime],
@@ -582,7 +624,7 @@
               hoverinfo: "skip"
             }
           ];
-
+          
           const subtitlePieces = [];
           if (latestObservedTime) {
             subtitlePieces.push(`Latest observed: ${fmtLocal(latestObservedTime)}`);
@@ -625,9 +667,15 @@
               bordercolor: "rgba(0,0,0,0)",
               borderwidth: 0,
               font: { size: 14 }
-            },
-            annotations: [
-              {
+            }
+          };
+
+          redrawCurrentChart = function() {
+            const showRange = rangeToggle.checked;
+            
+            // Base annotations array reset
+            layout.annotations = [
+               {
                 xref: "paper",
                 yref: "y",
                 x: 0.01,
@@ -639,18 +687,21 @@
                 font: { color: "#ff7f0e", size: 13 },
                 yshift: 4
               }
-            ]
+            ];
+
+            peaks.forEach((p, idx) => {
+              layout.annotations.push(buildPeakAnnotation(p, peakLayouts[idx], showRange));
+            });
+
+            Plotly.react("chart", traces, layout, {
+              responsive: true,
+              displayModeBar: false,
+              displaylogo: false
+            });
           };
 
-          peaks.forEach((p, idx) => {
-            layout.annotations.push(buildPeakAnnotation(p, peakLayouts[idx]));
-          });
-
-          Plotly.newPlot("chart", traces, layout, {
-            responsive: true,
-            displayModeBar: false,
-            displaylogo: false
-          });
+          redrawCurrentChart();
+          setStatus(`Viewing ${station.name}`);
         },
         error: function(err) {
           chartEl.innerHTML = `<p style="padding:20px;color:#b42318;font-weight:bold;">Failed to load CSV: ${err.message}</p>`;
@@ -660,15 +711,18 @@
     }
 
     populateStationDropdown();
-
+    
     stationSelect.addEventListener("change", function() {
       loadStation(this.value);
+    });
+    
+    rangeToggle.addEventListener("change", function() {
+      if (redrawCurrentChart) redrawCurrentChart();
     });
 
     loadStation(DEFAULT_STATION_ID);
 
     const downloadBtn = document.getElementById("downloadBtn");
-
     downloadBtn.addEventListener("click", function() {
       const currentStationId = stationSelect.value;
       const stationName = STATIONS[currentStationId].name.replace(/[^a-z0-9]/gi, "_").toLowerCase();
