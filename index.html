@@ -86,8 +86,35 @@
       color: var(--text);
       outline: none;
     }
-
-    .control-group select:focus {
+    .control-group-toggle {
+      display: flex;
+      align-items: end;
+    }
+    
+    .toggle-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 45px;
+      padding: 0 14px;
+      border: 1px solid #bcc9d6;
+      border-radius: 12px;
+      background: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      cursor: pointer;
+      user-select: none;
+    }
+    
+    .toggle-chip input[type="checkbox"] {
+      margin: 0;
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+        .control-group select:focus {
       border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(31, 119, 180, 0.12);
     }
@@ -198,6 +225,13 @@
           <div class="control-group" style="min-width: auto;">
             <button id="downloadBtn" class="btn">Download PNG</button>
           </div>
+          
+          <div class="control-group control-group-toggle" style="min-width: auto;">
+            <label class="toggle-chip">
+              <input type="checkbox" id="toggleForecastRange" />
+              <span>Show forecast tide range</span>
+            </label>
+          </div>
 
           <div class="control-group" style="min-width: auto;">
             <label class="check-wrap" for="toggleForecastRange">
@@ -274,6 +308,7 @@
     const chartEl = document.getElementById("chart");
     const statusEl = document.getElementById("status");
     const thresholdPill = document.getElementById("thresholdPill");
+    const toggleForecastRange = document.getElementById("toggleForecastRange");
     const toggleForecastRange = document.getElementById("toggleForecastRange");
     let forecastRangeTraceIndex = null;
 
@@ -452,11 +487,20 @@
       });
     }
 
-    function buildPeakAnnotation(peak, layoutPos) {
+    function buildPeakAnnotation(peak, layoutPos, showRange) {
       const tPeak = peak.dt;
       const tStart = new Date(tPeak.getTime() - 2 * 3600 * 1000);
       const tEnd = new Date(tPeak.getTime() + 2 * 3600 * 1000);
-
+    
+      const rangeLine = (
+        showRange &&
+        peak.range !== null &&
+        peak.range !== undefined &&
+        Number.isFinite(peak.range)
+      )
+        ? `<br><span style="font-size:15px;font-weight:600;color:rgba(0,0,0,0.82);line-height:1.0;white-space:nowrap;">Range ${peak.range.toFixed(1)} ft</span>`
+        : "";
+    
       return {
         x: peak.dt,
         y: peak.value,
@@ -482,8 +526,9 @@
         },
         text:
           `<span style="font-size:18px;font-weight:600;line-height:1.0;white-space:nowrap;">${formatPeakTime(tPeak)}</span><br>` +
-          `<span style="font-size:18px;font-weight:600;line-height:1.0;white-space:nowrap;">${peak.value.toFixed(1)} ft</span><br>` +
-          `<span style="font-size:15px;font-weight:500;color:rgba(0,0,0,0.72);line-height:1.0;white-space:nowrap;">Likely ${formatHour(tStart)} - ${formatHour(tEnd)}</span>`
+          `<span style="font-size:18px;font-weight:600;line-height:1.0;white-space:nowrap;">${peak.value.toFixed(1)} ft</span>` +
+          rangeLine +
+          `<br><span style="font-size:15px;font-weight:500;color:rgba(0,0,0,0.72);line-height:1.0;white-space:nowrap;">Likely ${formatHour(tStart)} - ${formatHour(tEnd)}</span>`
       };
     }
 
