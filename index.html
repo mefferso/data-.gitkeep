@@ -109,6 +109,29 @@
       background-color: #155a8a;
     }
 
+    .check-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      height: 45px;
+      padding: 0 12px;
+      border: 1px solid #bcc9d6;
+      border-radius: 12px;
+      background: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      color: #2a3a49;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .check-wrap input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
     .meta {
       display: flex;
       flex-wrap: wrap;
@@ -174,6 +197,13 @@
 
           <div class="control-group" style="min-width: auto;">
             <button id="downloadBtn" class="btn">Download PNG</button>
+          </div>
+
+          <div class="control-group" style="min-width: auto;">
+            <label class="check-wrap" for="toggleForecastRange">
+              <input id="toggleForecastRange" type="checkbox" />
+              Show forecast tide range
+            </label>
           </div>
         </div>
 
@@ -244,6 +274,72 @@
     const chartEl = document.getElementById("chart");
     const statusEl = document.getElementById("status");
     const thresholdPill = document.getElementById("thresholdPill");
+    const toggleForecastRange = document.getElementById("toggleForecastRange");
+    let forecastRangeTraceIndex = null;
+
+    function isStrictLocalExtrema(series, idx, neighborhood, kind) {
+      const curr = series[idx]?.value;
+      if (curr === null || curr === undefined) return false;
+
+      for (let j = 1; j <= neighborhood; j++) {
+        const left = series[idx - j]?.value;
+        const right = series[idx + j]?.value;
+        if (left === null || right === null || left === undefined || right === undefined) return false;
+
+        if (kind === "max") {
+          if (curr <= left || curr <= right) return false;
+        } else if (kind === "min") {
+          if (curr >= left || curr >= right) return false;
+        }
+      }
+      return true;
+    }
+
+    function findForecastExtrema(series, neighborhood = 2) {
+      const maxima = [];
+      const minima = [];
+
+      for (let i = neighborhood; i < series.length - neighborhood; i++) {
+        if (isStrictLocalExtrema(series, i, neighborhood, "max")) maxima.push(series[i]);
+        if (isStrictLocalExtrema(series, i, neighborhood, "min")) minima.push(series[i]);
+      }
+
+      return { maxima, minima };
+    }
+
+    function buildForecastTideRangeSeries(forecastSeries) {
+      const { maxima, minima } = findForecastExtrema(forecastSeries, 2);
+      const cycleRanges = [];
+
+      for (let i = 0; i < maxima.length - 1; i++) {
+        const crestA = maxima[i];
+        const crestB = maxima[i + 1];
+        const troughsBetween = minima.filter(
+          trough => trough.dt > crestA.dt && trough.dt < crestB.dt
+        );
+
+        if (troughsBetween.length === 0) continue;
+
+        const trough = troughsBetween.reduce((lowest, current) =>
+          current.value < lowest.value ? current : lowest
+        );
+
+        const crestAvg = (crestA.value + crestB.value) / 2;
+        const rangeFt = crestAvg - trough.value;
+        if (!Number.isFinite(rangeFt) || rangeFt <= 0) continue;
+
+        cycleRanges.push({
+          dt: crestB.dt,
+          value: rangeFt,
+          cycleStart: crestA.dt,
+          cycleEnd: crestB.dt,
+          troughTime: trough.dt,
+          troughValue: trough.value
+        });
+      }
+
+      return cycleRanges;
+    }
 
     function populateStationDropdown() {
       const stationList = Object.values(STATIONS).sort((a, b) => a.name.localeCompare(b.name));
@@ -398,6 +494,7 @@
         return;
       }
 
+      forecastRangeTraceIndex = null;
       thresholdPill.innerHTML = `<strong>Flood threshold:</strong> ${station.thresholdMLLW.toFixed(2)} ft ${station.datum}`;
       chartEl.innerHTML = "";
 
@@ -460,6 +557,7 @@
           const plotTransitionTime = latestObservedTime || new Date();
           const filteredForecast = forecast.filter(item => item.dt >= plotTransitionTime);
           const filteredBand = band.filter(item => item.dt >= plotTransitionTime);
+          const forecastTideRange = buildForecastTideRangeSeries(filteredForecast);
 
           const xObserved = filteredObserved.map(d => d.dt);
           const yObserved = filteredObserved.map(d => d.value);
@@ -479,6 +577,12 @@
             const match = bandLookup.get(d.dt.getTime());
             return match ? [match.low, match.high] : [null, null];
           });
+          const customdataForecastRange = forecastTideRange.map(item => [
+            item.cycleStart,
+            item.troughTime,
+            item.troughValue,
+            item.cycleEnd
+          ]);
 
           if (xObserved.length === 0 && xForecast.length === 0) {
             chartEl.innerHTML = "<p style='padding:20px;color:#b42318;font-weight:bold;'>CSV loaded, but no observed or future forecast water level values were found.</p>";
@@ -580,8 +684,27 @@
               marker: { color: "red", size: 8 },
               showlegend: false,
               hoverinfo: "skip"
+            },
+            {
+              x: forecastTideRange.map(item => item.dt),
+              y: forecastTideRange.map(item => item.value),
+              customdata: customdataForecastRange,
+              mode: "lines+markers",
+              name: "Forecast tide range (crest-to-crest)",
+              line: { width: 3, color: "#6f42c1", dash: "dot" },
+              marker: { size: 6, color: "#6f42c1", symbol: "diamond" },
+              yaxis: "y2",
+              visible: "legendonly",
+              hovertemplate:
+                `%{x|%a, %b %-d, %-I:%M %p}` +
+                `<br>Forecast tide range: %{y:.2f} ft` +
+                `<br>Cycle: %{customdata[0]|%a %-I:%M %p} to %{customdata[3]|%a %-I:%M %p}` +
+                `<br>Trough: %{customdata[2]:.2f} ft at %{customdata[1]|%a %-I:%M %p}` +
+                `<extra></extra>`
             }
           ];
+
+          forecastRangeTraceIndex = traces.length - 1;
 
           const subtitlePieces = [];
           if (latestObservedTime) {
@@ -613,6 +736,14 @@
               title: { text: `Water level in feet (${station.datum})`, font: { size: 18 } },
               tickfont: { size: 14 },
               gridcolor: "rgba(0,0,0,0.08)",
+              zeroline: false
+            },
+            yaxis2: {
+              title: { text: "Forecast tide range (ft)", font: { size: 15, color: "#6f42c1" } },
+              tickfont: { size: 13, color: "#6f42c1" },
+              overlaying: "y",
+              side: "right",
+              showgrid: false,
               zeroline: false
             },
             legend: {
@@ -651,6 +782,12 @@
             displayModeBar: false,
             displaylogo: false
           });
+
+          toggleForecastRange.checked = false;
+          toggleForecastRange.disabled = forecastTideRange.length === 0;
+          toggleForecastRange.title = forecastTideRange.length === 0
+            ? "No crest-to-crest forecast tide range available in this forecast window."
+            : "Toggle forecast crest-to-crest tide range overlay.";
         },
         error: function(err) {
           chartEl.innerHTML = `<p style="padding:20px;color:#b42318;font-weight:bold;">Failed to load CSV: ${err.message}</p>`;
@@ -663,6 +800,12 @@
 
     stationSelect.addEventListener("change", function() {
       loadStation(this.value);
+    });
+
+    toggleForecastRange.addEventListener("change", function() {
+      if (forecastRangeTraceIndex === null) return;
+      const visibleState = this.checked ? true : "legendonly";
+      Plotly.restyle("chart", { visible: visibleState }, [forecastRangeTraceIndex]);
     });
 
     loadStation(DEFAULT_STATION_ID);
