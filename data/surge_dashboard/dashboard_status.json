@@ -1,10 +1,10 @@
 {
-  "generated_utc": "2026-04-25T17:06:09Z",
-  "generated_local": "2026-04-25 12:06 CDT",
+  "generated_utc": "2026-04-25T18:01:32Z",
+  "generated_local": "2026-04-25 13:01 CDT",
   "headline": "Modest surge signal: forecast surge peaks near 0.50 ft.",
   "series_count": 91,
   "max_surge_ft": 0.5,
-  "max_twl_ft": 1.361,
+  "max_twl_ft": 1.349,
   "max_gust_kt": 11.0,
   "next_high_tide": {
     "time_utc": "2026-04-26T09:08:00Z",
